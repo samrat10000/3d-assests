@@ -56,3 +56,14 @@ Not done: motion blur, depth of field and burner flame sprites.
 - **Grille:** rebuilt to match the reference. It's two single rows of upright cells, each about one lamp tall, with thin satin dividers over a dark plum cavity. The upper row sits between the lamps, a heavy chrome bar wraps the corners, and the lower row runs full width with round parking lamps. The bumper moved up to meet it.
 - **Lamps:** smaller, in chrome rings over dark cups. The black sockets are gone.
 - **Note art:** now reads as a hundred-dollar bill. It has "THE UNITED STATES OF AMERICA", "FEDERAL RESERVE NOTE", the black Federal Reserve seal, the green Treasury seal, green serials, rosettes behind the corner 100s, the legal-tender line, signatures and "ONE HUNDRED DOLLARS". The portrait is a generic engraved bust. The paper is cream with a green tint and red/blue fibres.
+
+## Dream Currency, pass 5: lowrider car
+
+The car in `src/assets/classic.ts` is rebuilt to the user's lowrider references, with no badges or scripts.
+- **Body:** early-60s hardtop with slab sides, one knife-edge crease running the full length with a chrome spear, a flat hood and deck, and no fins. It has deep round wheel wells with chrome lips and a broad chrome lower molding.
+- **Front:** quad round lamps in chrome bezels with chrome reflectors, set in chrome housings at the ends of a fine full-width grille (horizontal bars over close vertical dividers). It has a heavy wraparound bumper with a slight V and rectangular amber parking lamps.
+- **Rear:** a satin trim band with three round tail lamps per side, a bumper and twin exhausts.
+- **Wheels:** small chrome wire wheels (72 laced spokes, two-ear knock-off) with thin whitewalls. Wheel radius is now 5/16, so it stays integer against the roll radius.
+- **Hydraulics:** exposed chrome cylinders and frame rails, front A-arms, rear trailing links and coil springs. The springs and links ride with each wheel.
+- **Motion** (`MoneyCarScene.ts`): six 4-second moves per loop: nose hop, nose hop, three-wheel left, nose hop, side-to-side sway, three-wheel right. The body is posed by heave, pitch and roll. Once a corner rises past the suspension's travel, that wheel leaves the roll and hangs.
+- **Checks:** loop seam diff 8e-6. The GLB is 32 MB.

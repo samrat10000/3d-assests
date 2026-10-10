@@ -24,6 +24,8 @@ void main(){vec3 c=texture2D(tDiffuse,vUv).rgb;float l=dot(c,vec3(.2126,.7152,.0
  * every oscillator uses integer harmonics of the loop, so t=0 and t=DURATION render identically.
  */
 const DURATION=24;
+const MOVES=['nose','nose','threeL','nose','sway','threeR'] as const; // one hydraulic move per 4 s
+const TRAVEL=.2;                // suspension droop before a wheel leaves the roll
 const R=5;                 // roll radius
 const L=7;                 // roll length (axis = world Z); short, so both ends and their bands frame the car as in the reference
 const BILLS_AROUND=2;      // each note's long side wraps half the circumference, so headline text and serials run around the roll
@@ -180,7 +182,7 @@ const strip=new T.Mesh(new T.CylinderGeometry(30,30,1.6,64,1,true),new T.MeshBas
 const sunCard=new T.Mesh(new T.PlaneGeometry(6,2.5),new T.MeshBasicMaterial({color:new T.Color(1.8,.9,.45),side:T.DoubleSide}));sunCard.position.copy(SUN_DIR).multiplyScalar(28);sunCard.lookAt(0,0,0);envScene.add(sunCard);const pm=new T.PMREMGenerator(renderer);const envRT=pm.fromScene(envScene,.01);scene.environment=envRT.texture;pm.dispose();
 scene.fog=new T.FogExp2('#c46a86',.0055);
 scene.add(new T.HemisphereLight('#ff9fc0','#4a1c34',.75));
-const sunLight=light(scene,'#ff9a52',3.8,[SUN_DIR.x*30,SUN_DIR.y*30+4,SUN_DIR.z*30],!low);sunLight.shadow.camera.left=-9;sunLight.shadow.camera.right=9;sunLight.shadow.camera.top=9;sunLight.shadow.camera.bottom=-9;sunLight.shadow.camera.far=80;sunLight.target.position.set(0,5,0);scene.add(sunLight.target);
+const sunLight=light(scene,'#ff9a52',3.0,[SUN_DIR.x*30,SUN_DIR.y*30+4,SUN_DIR.z*30],!low);sunLight.shadow.camera.left=-9;sunLight.shadow.camera.right=9;sunLight.shadow.camera.top=9;sunLight.shadow.camera.bottom=-9;sunLight.shadow.camera.far=80;sunLight.target.position.set(0,5,0);scene.add(sunLight.target);
 light(scene,'#ffb0cc',.9,[10,9,2]);light(scene,'#d0609a',.6,[-6,3,9]);
 
 // ---------- the money roll ----------
@@ -243,12 +245,19 @@ const dummy=new T.Object3D();
 const grade=new ShaderPass(GradeShader);
 return{supportsTransparency:false,root,duration:DURATION,background:'#7a2f52',target:v(0,5.5,0),distance:11,bloom:.5,postPasses:[grade],dispose:()=>{envRT.dispose();grade.dispose()},update(t){const u=t/DURATION,phase=u*TAU;
  roll.rotation.z=phase*ROLL_TURNS;
- // Hydraulics: 4 s cycle (6 per loop) — preload, nose lift, short airborne hop, damped landing. Nose stays slightly raised at rest.
- const cycle=(t%4)/4;const pulse=(a:number,b:number)=>cycle>a&&cycle<b?Math.sin((cycle-a)/(b-a)*Math.PI):0;
- const lift=pulse(.12,.6);const hop=.16*Math.pow(pulse(.3,.62),1.5);const landing=cycle>.62&&cycle<.96?Math.sin((cycle-.62)/.34*Math.PI*3)*Math.exp(-(cycle-.62)*11):0;
- const suspension=.0+.06*lift-.03*landing;const pitch=.008+.045*lift-.02*landing;
- car.root.position.y=rideY+hop;car.update(phase*ROLL_TURNS*R/WHEEL_RADIUS,suspension);car.chassis.rotation.x=-pitch;car.chassis.rotation.z=.012*Math.sin(phase*6);
- car.suspensions.forEach((s,i)=>{s.position.y=wheelRest[i]+(s.position.z>0?.05*lift:0)});
+ // Lowrider hydraulics: six 4 s moves per loop, each starting and ending at rest (seamless).
+ // Body pose = heave h, pitch p (nose up +), roll q (+X side up). A wheel stays on the roll until its corner rises
+ // past the suspension's travel, then it hangs in the air with the body (three-wheeling, nose hops).
+ const k=Math.floor(t/4)%6,c=(t%4)/4,move=MOVES[k];
+ const sm=(a:number,b:number)=>T.MathUtils.smoothstep(c,a,b);const hold=(a:number,b:number,cc:number,d:number)=>sm(a,b)*(1-sm(cc,d));
+ const ring=(u0:number,amp:number,f:number,decay:number)=>c>u0?amp*Math.sin((c-u0)*f*TAU)*Math.exp(-(c-u0)*decay)*Math.min(1,(1-c)*8):0;
+ let h=0,p=0,q=0,hop=0;
+ if(move==='nose'){const up=hold(.1,.22,.5,.58);p=.17*up+ring(.58,.05,3,10);h=.13*up-.04*hold(.02,.07,.08,.12)+ring(.58,.035,3,10);hop=.22*Math.pow(Math.max(0,Math.sin(Math.min(1,Math.max(0,(c-.3)/.22))*Math.PI)),1.3);}
+ else if(move==='threeL'||move==='threeR'){const sd=move==='threeL'?-1:1,up=hold(.1,.26,.68,.84);q=sd*.13*up+ring(.84,.02*sd,2.5,12);p=.07*up;h=.09*up+ring(.84,.02,2.5,12);}
+ else{const env=hold(.05,.15,.75,.9);q=.09*Math.sin((c-.05)*2*TAU)*env;h=.05*env;p=.02*env;}
+ car.root.position.y=rideY+hop;car.update(phase*ROLL_TURNS*R/WHEEL_RADIUS,h);car.chassis.rotation.set(-p,0,q);
+ car.suspensions.forEach((s,i)=>{const lift=h+p*s.position.z+q*s.position.x;s.position.y=wheelRest[i]+Math.max(0,lift-TRAVEL)});
+ const suspension=h,pitch=p,cycle=c;
  root.userData.motion={hop,suspension,pitch,cycle};contactMat.opacity=.7*Math.max(.25,1-hop*5);
  balloons.forEach((b,i)=>{b.group.position.copy(b.base);b.group.position.y+=.35*Math.sin(phase+b.phase*3);b.group.position.x+=.25*Math.sin(phase*2+i);b.group.rotation.z=.02*Math.sin(phase+i)});
  let n=0;
