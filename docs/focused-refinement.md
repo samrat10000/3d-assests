@@ -25,3 +25,15 @@ Dream Currency (scene id `money`)
 - `src/assets/classic.ts` — procedural coupe (no source GLB)
 
 Shared by both: `src/runtime.ts`, `src/shared.ts`, `src/optimize.ts`, `src/main.ts`, `src/style.css`. Regenerate exports with `scripts/capture-focused.mjs`.
+
+## Dream Currency — reference-matched rebuild (10 October 2026, pass 2)
+
+Rebuilt against the reference video frame by frame.
+- Car (`src/assets/classic.ts`): new early-60s finned hardtop body. Height-parametrised side surfaces cut true wheel arches, plus a superellipse deck, rear fins with blade tail lamps, lower skegs, hooded quad lamps, a full-width recessed egg-crate grille, a heavy wraparound bumper with bullets, a wraparound windshield, purple-tinted glass, a pale-faced driver, low-profile tyres and polished 6-spoke star rims. The lime-to-cream pearl paint uses vertex colours and iridescence. It exports `WHEEL_RADIUS`, `WHEEL_Z` and `suspensions`.
+- Roll: radius 5, length 7. Two notes wrap the circumference, so headline text and serials run around the roll as in the reference. The notes are shingled with stepped cut edges and have corrugated layer zones. The ends are ragged spiral paper, and there are 4 flat amber bands near the ends. The note art is fictional ("UNITED STATES OF IMAGINATION").
+- Balloons: dark burgundy, rust and striped gored envelopes with scalloped panels, 16 cables, 4 stacked hoop rings (the top one glows as the burner) and a basket. They are placed in each shot's screen space with `inShot()`. Cash streams fall from 4 baskets, and there is a swirling cash cloud.
+- Sky: a saturated pink-magenta sunset with a gold sunward horizon, fbm cloud banks, distant hills and a low sun behind the car. The sun shows under the chassis, which matches the reference's under-bumper glow. The reflection environment is a PMREM of the same sky over a dark ground.
+- Camera: low lens at roll height with long-lens shots. The order is: hero sun-side front 3/4, then head-on, then shaded-side front 3/4, then head-on, then hero push and pull. There is handheld drift at integer loop harmonics.
+- Loop seam: max matrix diff between t=0 and t=24 is 6.5e-6. The GLB was re-exported (23.5 MB).
+- `src/optimize.ts`: `batchRigid` now keeps vertex colours, filling in white when only part of a bucket has them.
+Not done: motion blur, depth of field and burner flame sprites.
