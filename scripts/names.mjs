@@ -1,0 +1,2 @@
+﻿import fs from 'node:fs';
+for(const name of ['concept-car','motorcycle','classic-car']){const b=fs.readFileSync('public/assets/'+name+'.glb');const n=b.readUInt32LE(12),j=JSON.parse(b.subarray(20,20+n).toString());console.log(name,'materials',j.materials?.map(m=>m.name));console.log('nodes',j.nodes?.filter(n=>/wheel|rim|tire|body|car/i.test(n.name)).map(n=>({name:n.name,translation:n.translation,rotation:n.rotation})));}

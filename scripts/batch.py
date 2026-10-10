@@ -1,0 +1,3 @@
+﻿from pathlib import Path
+p=Path('src/scenes/MoneyCarScene.ts');s=p.read_text(encoding='utf-8-sig').replace("import {createClassicCar}","import {batchRigid} from '../optimize';\nimport {createClassicCar}");s=s.replace('const car=createClassicCar();','const car=createClassicCar();batchRigid(car.chassis);car.wheels.forEach(batchRigid);');p.write_text(s,encoding='utf-8')
+p=Path('src/scenes/TrafficSculptureScene.ts');s=p.read_text(encoding='utf-8-sig').replace("import {createTrafficSculpture}","import {batchRigid} from '../optimize';\nimport {createTrafficSculpture}");s=s.replace('const root=createTrafficSculpture();','const root=createTrafficSculpture();batchRigid(root);');p.write_text(s,encoding='utf-8')

@@ -1,0 +1,6 @@
+﻿node_modules/
+dist/
+validation/
+reference/
+.openai/*local*
+*.zip

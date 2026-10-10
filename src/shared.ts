@@ -1,0 +1,16 @@
+import * as T from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {DRACOLoader} from 'three/addons/loaders/DRACOLoader.js';
+export const TAU=Math.PI*2;
+export const mat=(color:T.ColorRepresentation,metalness=0,roughness=.45)=>new T.MeshStandardMaterial({color,metalness,roughness});
+export function mesh(g:T.BufferGeometry,m:T.Material|T.Material[],p:T.Object3D,x=0,y=0,z=0){const o=new T.Mesh(g,m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;p.add(o);return o}
+export function box(p:T.Object3D,m:T.Material,w:number,h:number,d:number,x=0,y=0,z=0){return mesh(new T.BoxGeometry(w,h,d),m,p,x,y,z)}
+export function tube(p:T.Object3D,points:T.Vector3[],radius:number,m:T.Material){return mesh(new T.TubeGeometry(new T.CatmullRomCurve3(points),Math.max(points.length*6,12),radius,6,false),m,p)}
+export const v=(x:number,y:number,z:number)=>new T.Vector3(x,y,z);
+export function random(seed=1){return()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296}}
+export async function model(path:string,size:number){const loader=new GLTFLoader();const draco=new DRACOLoader();draco.setDecoderPath(`${import.meta.env.BASE_URL}draco/`);loader.setDRACOLoader(draco);try{const g=(await loader.loadAsync(path)).scene;const b=new T.Box3().setFromObject(g),s=b.getSize(v(0,0,0));g.scale.multiplyScalar(size/Math.max(s.x,s.y,s.z));g.updateMatrixWorld(true);const c=new T.Box3().setFromObject(g).getCenter(v(0,0,0));g.position.sub(c);const root=new T.Group();root.add(g);root.traverse(o=>{if(o instanceof T.Mesh){o.castShadow=true;o.receiveShadow=true}});return root}finally{draco.dispose()}}
+export function studio(scene:T.Scene,renderer:T.WebGLRenderer,colors:string[]){const env=new T.Scene();env.background=new T.Color('#090911');colors.forEach((c,i)=>{const a=i/colors.length*TAU;const card=mesh(new T.PlaneGeometry(i===0?7:3,8),new T.MeshBasicMaterial({color:new T.Color(c).multiplyScalar(3),side:T.DoubleSide}),env,Math.sin(a)*6,2,Math.cos(a)*6);card.lookAt(0,0,0)});mesh(new T.PlaneGeometry(9,3),new T.MeshBasicMaterial({color:new T.Color(3,3,3),side:T.DoubleSide}),env,0,7,0).rotation.x=Math.PI/2;const pm=new T.PMREMGenerator(renderer);const rt=pm.fromScene(env,.02);scene.environment=rt.texture;pm.dispose();env.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();(o.material as T.Material).dispose()}});return()=>rt.dispose()}
+export function light(scene:T.Scene,color:string,power:number,pos:number[],shadow=false){const l=new T.DirectionalLight(color,power);l.position.set(...pos as [number,number,number]);l.castShadow=shadow;l.shadow.mapSize.set(2048,2048);l.shadow.camera.left=-15;l.shadow.camera.right=15;l.shadow.camera.top=15;l.shadow.camera.bottom=-15;l.shadow.bias=-.001;scene.add(l);return l}
+export function canvasTexture(w:number,h:number,draw:(c:CanvasRenderingContext2D)=>void){const c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d')!);const t=new T.CanvasTexture(c);t.colorSpace=T.SRGBColorSpace;t.anisotropy=8;return t}
+export function smokeTexture(){return canvasTexture(128,128,c=>{const g=c.createRadialGradient(64,64,0,64,64,63);g.addColorStop(0,'rgba(255,255,255,.6)');g.addColorStop(.35,'rgba(240,240,255,.3)');g.addColorStop(1,'rgba(255,255,255,0)');c.fillStyle=g;c.fillRect(0,0,128,128)})}
+
