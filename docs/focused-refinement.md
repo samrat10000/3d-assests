@@ -37,3 +37,16 @@ Rebuilt against the reference video frame by frame.
 - Loop seam: max matrix diff between t=0 and t=24 is 6.5e-6. The GLB was re-exported (23.5 MB).
 - `src/optimize.ts`: `batchRigid` now keeps vertex colours, filling in white when only part of a bucket has them.
 Not done: motion blur, depth of field and burner flame sprites.
+
+## Dream Currency, pass 3 (depth and finish)
+
+- **Front end:** rebuilt to the '61 layout. The nose now curves forward in a soft V. Two small twin lamps sit in dark sockets under a body-colour hood lip. The grille has two tiers of fine grid: the upper tier between the lamps, the lower tier full width with round parking lamps. A heavy chrome bar separates the tiers. The front and rear bumpers are smooth curved chrome shapes wrapped around the corners, not boxes.
+- **Sky:** darker dusk. Rose turns to amber toward the sun and deep plum overhead. Clouds have dark undersides and hot edges, and there's a sea of sunset cloud below the horizon. The sun sits low and directly behind the car from the hero camera, so it glows under the chassis.
+- **Depth:**
+  - Lens blur focused on the car each frame.
+  - Colour grade: magenta in the shadows, warm highlights, vignette, fine grain.
+  - Soft contact shadow on the roll under the car.
+  - Denser pink haze.
+  - Reflections now include a bright horizon strip and a sun card, so paint and chrome get crisp highlight streaks.
+- **Runtime:** `World.postPasses` adds passes before `OutputPass`. The builder now also receives the camera as an optional 4th argument. Other scenes are unaffected.
+- **Checks:** builds pass. The loop seam diff is 6.5e-6. The GLB was re-exported at 26.3 MB.

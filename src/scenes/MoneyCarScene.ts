@@ -3,6 +3,20 @@ import {Experience,type SceneOptions,type World} from '../runtime';
 import {light,v,TAU,mesh,canvasTexture,random} from '../shared';
 import {batchRigid} from '../optimize';
 import {createClassicCar,WHEEL_RADIUS,WHEEL_Z} from '../assets/classic';
+import {BokehPass} from 'three/addons/postprocessing/BokehPass.js';
+import {ShaderPass} from 'three/addons/postprocessing/ShaderPass.js';
+
+/** Filmic finish in linear HDR before OutputPass: magenta shadow lift, warm highlights, slight saturation, vignette, fine grain. */
+const GradeShader={uniforms:{tDiffuse:{value:null},time:{value:0}},vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+fragmentShader:`uniform sampler2D tDiffuse;uniform float time;varying vec2 vUv;
+float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
+void main(){vec3 c=texture2D(tDiffuse,vUv).rgb;float l=dot(c,vec3(.2126,.7152,.0722));
+ c=mix(vec3(l),c,1.12);
+ c+=vec3(.045,.012,.035)*(1.-smoothstep(0.,.35,l));
+ c*=mix(vec3(1.),vec3(1.06,.95,.9),smoothstep(.4,1.5,l));
+ vec2 v=vUv-.5;c*=mix(.5,1.,smoothstep(.82,.22,length(v*vec2(1.15,1.))));
+ c+=(hash(vUv*vec2(1920.,1080.)+time)-.5)*.012;
+ gl_FragColor=vec4(max(c,0.),1.);}`};
 
 /*
  * Dream Currency — a lime pearl finned hardtop cruising on top of a giant rolled stack of banknotes,
@@ -15,7 +29,7 @@ const R=5;                 // roll radius
 const L=7;                 // roll length (axis = world Z); short, so both ends and their bands frame the car as in the reference
 const BILLS_AROUND=2;      // each note's long side wraps half the circumference, so headline text and serials run around the roll
 const ROLL_TURNS=2;        // R / WHEEL_RADIUS = 12.5, so 2 turns => 25 wheel turns => seamless loop
-const SUN_DIR=new T.Vector3(-.74,.03,-.67).normalize(); // low sun behind the car from the hero camera; shows through under the chassis
+const SUN_DIR=new T.Vector3(-.78,.014,-.63).normalize(); // low sun behind the car from the hero camera; shows through under the chassis
 
 // Camera shots (position, aim, fov). Hero = sun side, low front three-quarter; side = shaded side; head = grille-level head-on.
 type Shot={pos:[number,number,number];aim:[number,number,number];fov:number};
@@ -111,9 +125,9 @@ function balloon(parent:T.Object3D,pos:[number,number,number],scale:number,tex:T
  basket.updateMatrixWorld(true);
  return{group:g,basket:v(pos[0],pos[1]+BASKET_Y*scale,pos[2]),base:v(...pos),phase}}
 
-export class MoneyCarScene extends Experience{constructor(el:HTMLElement,o:SceneOptions={}){super(el,async(scene,renderer,options):Promise<World>=>{
+export class MoneyCarScene extends Experience{constructor(el:HTMLElement,o:SceneOptions={}){super(el,async(scene,renderer,options,camera):Promise<World>=>{
 const root=new T.Group();const low=options.quality==='low';
-renderer.toneMappingExposure=.95;
+renderer.toneMappingExposure=.82;
 
 // ---------- sky (also used as the reflection environment) ----------
 const skyMat=new T.ShaderMaterial({side:T.BackSide,depthWrite:false,fog:false,uniforms:{sun:{value:SUN_DIR}},vertexShader:'varying vec3 p;void main(){p=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
@@ -123,35 +137,41 @@ float noise(vec2 q){vec2 i=floor(q),f=fract(q);f=f*f*(3.-2.*f);return mix(mix(ha
 float fbm(vec2 q){float s=0.,a=.5;for(int i=0;i<5;i++){s+=a*noise(q);q=q*2.03+vec2(1.7,9.2);a*=.5;}return s;}
 void main(){vec3 d=normalize(p);float h=d.y;float g=max(dot(d,sun),0.);
  float sw=pow(max(dot(normalize(d.xz+1e-4),normalize(sun.xz)),0.),2.);
- vec3 horizon=mix(vec3(.98,.52,.62),vec3(1.,.56,.26),sw),mid=mix(vec3(.86,.36,.56),vec3(1.,.48,.38),sw*.6),zen=vec3(.46,.2,.46);
- vec3 col=mix(horizon,mid,smoothstep(0.,.2,h));col=mix(col,zen,smoothstep(.2,.8,h));
- // clouds: soft pink banks, brighter rims toward the sun, darker magenta bellies
- vec2 q=d.xz/(max(h,0.)+.18)*1.15;float n=fbm(q*.9+vec2(3.,1.));float n2=fbm(q*2.4-vec2(5.,2.));
- float cl=smoothstep(.36,.74,n*.75+n2*.35)*smoothstep(-.01,.06,h);
- vec3 belly=vec3(.56,.2,.42),lit=mix(vec3(1.,.62,.72),vec3(1.,.72,.42),sw);vec3 cc=mix(belly,lit,clamp(pow(g,3.)*1.4+n2*.5,0.,1.));col=mix(col,cc,cl*.85);
- // low haze band and distant hills
- float hill=.012+.02*fbm(vec2(atan(d.z,d.x)*6.,1.3));col=mix(col,vec3(.62,.46,.56),smoothstep(hill+.004,hill-.004,h)*.75);
- col=mix(col,mix(vec3(1.,.66,.72),vec3(1.,.7,.42),sw),exp(-abs(h)*24.)*.45);
- // sun: wide warm bloom, hot core, tiny disc
- col+=vec3(1.,.42,.16)*pow(g,4.)*.5+vec3(1.,.6,.3)*pow(g,36.)*1.2+vec3(1.,.85,.6)*pow(g,900.)*6.;
- col*=.74*(1.-.6*smoothstep(-.01,-.25,h));
+ // dusk gradient: rose to amber toward the sun, deep plum overhead
+ vec3 hor=mix(vec3(.86,.36,.46),vec3(1.,.5,.2),sw),mid=mix(vec3(.6,.22,.42),vec3(.92,.38,.3),sw*.7),zen=vec3(.22,.09,.26);
+ vec3 col=mix(hor,mid,smoothstep(0.,.18,h));col=mix(col,zen,smoothstep(.18,.75,h));
+ // cloud banks with dark plum bellies and hot rims toward the sun
+ vec2 q=d.xz/(max(h,0.)+.12);float n=fbm(q*.8+vec2(3.,1.)),n2=fbm(q*2.6-vec2(5.,2.));
+ float cl=smoothstep(.4,.8,n*.8+n2*.3)*smoothstep(0.,.05,h)*(1.-smoothstep(.5,.9,h));
+ vec3 belly=vec3(.34,.11,.27),lit=mix(vec3(1.,.5,.6),vec3(1.,.66,.32),sw);float rim=clamp(pow(g,2.)*1.6+(n2-.4)*1.3,0.,1.);
+ col=mix(col,mix(belly,lit,rim),cl*.9);
+ // we are far above the ground: a sea of sunset cloud below the horizon, darker as it falls away
+ if(h<0.){vec2 s=d.xz/(-h+.03)*.6;float c=fbm(s*.7+1.)*.7+fbm(s*2.2)*.3;vec3 sea=mix(vec3(.32,.12,.28),mix(vec3(.95,.5,.56),vec3(1.,.62,.34),sw),smoothstep(.35,.75,c));col=mix(col,sea,smoothstep(0.,-.02,h));col*=mix(1.,.5,smoothstep(-.02,-.4,h));}
+ // horizon haze
+ col=mix(col,mix(vec3(.95,.55,.6),vec3(1.,.62,.32),sw),exp(-abs(h)*30.)*.5);
+ // sun: warm bloom, hot core, small disc
+ col+=vec3(1.,.38,.12)*pow(g,5.)*.45+vec3(1.,.55,.22)*pow(g,40.)*1.1+vec3(1.,.82,.55)*pow(g,1200.)*8.;
+ col*=.85;
  gl_FragColor=vec4(col,1.);
  #include <tonemapping_fragment>
  #include <colorspace_fragment>
 }`});
 const sky=mesh(new T.SphereGeometry(400,64,32),skyMat,scene);sky.castShadow=sky.receiveShadow=false;sky.renderOrder=-1;
-const envScene=new T.Scene();envScene.add(new T.Mesh(new T.SphereGeometry(50,48,24),skyMat));const envGround=new T.Mesh(new T.CircleGeometry(40,48),new T.MeshBasicMaterial({color:'#3a2632'}));envGround.rotation.x=-Math.PI/2;envGround.position.y=-2.5;envScene.add(envGround);const pm=new T.PMREMGenerator(renderer);const envRT=pm.fromScene(envScene,.035);scene.environment=envRT.texture;pm.dispose();
-scene.fog=new T.FogExp2('#d98aa3',.0042);
-scene.add(new T.HemisphereLight('#ffb9d2','#6a3046',1.0));
-const sunLight=light(scene,'#ffa060',3.2,[SUN_DIR.x*30,SUN_DIR.y*30+4,SUN_DIR.z*30],!low);sunLight.shadow.camera.left=-9;sunLight.shadow.camera.right=9;sunLight.shadow.camera.top=9;sunLight.shadow.camera.bottom=-9;sunLight.shadow.camera.far=80;sunLight.target.position.set(0,5,0);scene.add(sunLight.target);
-light(scene,'#ffc2da',1.2,[10,9,2]);light(scene,'#ff8fb4',.8,[-6,3,9]);
+const envScene=new T.Scene();envScene.add(new T.Mesh(new T.SphereGeometry(50,48,24),skyMat));const envGround=new T.Mesh(new T.CircleGeometry(40,48),new T.MeshBasicMaterial({color:'#3a2632'}));envGround.rotation.x=-Math.PI/2;envGround.position.y=-2.5;envScene.add(envGround);
+// Bright horizon strip + sun card: gives the paint and chrome the long crisp highlight streaks seen in the reference.
+const strip=new T.Mesh(new T.CylinderGeometry(30,30,1.6,64,1,true),new T.MeshBasicMaterial({color:new T.Color(1.3,.75,.72),side:T.BackSide}));strip.position.y=.6;envScene.add(strip);
+const sunCard=new T.Mesh(new T.PlaneGeometry(10,4),new T.MeshBasicMaterial({color:new T.Color(3.2,1.6,.8),side:T.DoubleSide}));sunCard.position.copy(SUN_DIR).multiplyScalar(28);sunCard.lookAt(0,0,0);envScene.add(sunCard);const pm=new T.PMREMGenerator(renderer);const envRT=pm.fromScene(envScene,.01);scene.environment=envRT.texture;pm.dispose();
+scene.fog=new T.FogExp2('#c46a86',.0055);
+scene.add(new T.HemisphereLight('#ff9fc0','#4a1c34',.75));
+const sunLight=light(scene,'#ff9a52',3.8,[SUN_DIR.x*30,SUN_DIR.y*30+4,SUN_DIR.z*30],!low);sunLight.shadow.camera.left=-9;sunLight.shadow.camera.right=9;sunLight.shadow.camera.top=9;sunLight.shadow.camera.bottom=-9;sunLight.shadow.camera.far=80;sunLight.target.position.set(0,5,0);scene.add(sunLight.target);
+light(scene,'#ffb0cc',.9,[10,9,2]);light(scene,'#d0609a',.6,[-6,3,9]);
 
 // ---------- the money roll ----------
 const noteCanvas=banknoteCanvas();const noteTex=new T.CanvasTexture(noteCanvas);noteTex.colorSpace=T.SRGBColorSpace;noteTex.anisotropy=8;
-const paper=new T.MeshStandardMaterial({map:noteTex,roughness:.78,color:'#f0d2cc',side:T.DoubleSide});
+const paper=new T.MeshStandardMaterial({map:noteTex,bumpMap:noteTex,bumpScale:-2.5,roughness:.72,color:'#f0d2cc',side:T.DoubleSide});
 const paperEdge=new T.MeshStandardMaterial({color:'#f2e3c6',roughness:.9,side:T.DoubleSide});
 const endMat=new T.MeshStandardMaterial({map:rollEndTexture(),roughness:.95,color:'#ffe4d0',side:T.DoubleSide});
-const bandMat=new T.MeshPhysicalMaterial({color:'#c46f2a',roughness:.42,clearcoat:.4,sheen:.6,sheenColor:new T.Color('#ffc58a')});
+const bandMat=new T.MeshPhysicalMaterial({color:'#b86a35',roughness:.6,clearcoat:.4,sheen:.6,sheenColor:new T.Color('#ffc58a')});
 const roll=new T.Group();roll.name='Banknote roll';root.add(roll);
 for(let k=0;k<BILLS_AROUND;k++)noteSector(k,paper,paperEdge,roll);
 mesh(new T.CylinderGeometry(R-.01,R-.01,L-.02,96,1,true),paperEdge,roll).rotation.x=Math.PI/2; // inner backing so no gaps show
@@ -164,6 +184,12 @@ const contactY=(x:number)=>Math.sqrt((R+WHEEL_RADIUS)**2-x*x);
 const rideY=(contactY(WHEEL_Z.front)+contactY(WHEEL_Z.rear))/2-WHEEL_RADIUS;car.root.position.y=rideY;
 car.suspensions.forEach(s=>{s.position.y=contactY(s.position.z)-rideY});
 const wheelRest=car.suspensions.map(s=>s.position.y);
+
+// Soft contact shadow conforming to the roll under the car (adds grounding/depth beyond the shadow map).
+const shadowTex=canvasTexture(256,256,g=>{const r=g.createRadialGradient(128,128,8,128,128,128);r.addColorStop(0,'rgba(0,0,0,1)');r.addColorStop(.55,'rgba(0,0,0,.55)');r.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=r;g.fillRect(0,0,256,256)});
+const contactGeo=(()=>{const pos:number[]=[],uv:number[]=[],idx:number[]=[],n=24,A=.62,Z=1.25;for(let j=0;j<=n;j++)for(let i=0;i<=n;i++){const a=Math.PI/2+(i/n*2-1)*A,z=(j/n*2-1)*Z;pos.push(Math.cos(a)*(R+.045),Math.sin(a)*(R+.045),z);uv.push(i/n,j/n)}for(let j=0;j<n;j++)for(let i=0;i<n;i++){const a=j*(n+1)+i,b=a+n+1;idx.push(a,a+1,b,b,a+1,b+1)}const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(pos,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(idx);return g})();
+const contactMat=new T.MeshBasicMaterial({color:'#1a0610',alphaMap:shadowTex,transparent:true,opacity:.7,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2});
+const contact=new T.Mesh(contactGeo,contactMat);contact.renderOrder=1;root.add(contact);
 
 // ---------- balloons ----------
 const metal=new T.MeshStandardMaterial({color:'#2b1d1f',metalness:.8,roughness:.4});
@@ -196,7 +222,9 @@ const swirl=Array.from({length:SWIRL},()=>({r:2.5+rng()*13,a:rng()*TAU,y:rng(),t
 const trail=TRAIL_SRC.flatMap(b=>Array.from({length:TRAIL_PER},()=>({b,phase:rng(),dx:(rng()-.5),dz:(rng()-.5),spin:rng()*TAU,s:.6+rng()*.5})));
 const dummy=new T.Object3D();
 
-return{supportsTransparency:false,root,duration:DURATION,background:'#f3c7d6',target:v(0,5.5,0),distance:11,bloom:.42,dispose:()=>envRT.dispose(),update(t){const u=t/DURATION,phase=u*TAU;
+// Depth of field focused on the car + filmic grade (composer path only; low quality renders without them).
+const bokeh=new BokehPass(scene,camera,{focus:10,aperture:.0011,maxblur:.0055});const grade=new ShaderPass(GradeShader);const focusPoint=v(0,5.5,0);
+return{supportsTransparency:false,root,duration:DURATION,background:'#7a2f52',target:v(0,5.5,0),distance:11,bloom:.5,postPasses:[bokeh,grade],dispose:()=>{envRT.dispose();bokeh.dispose();grade.dispose()},update(t){const u=t/DURATION,phase=u*TAU;
  roll.rotation.z=phase*ROLL_TURNS;
  // Hydraulics: 4 s cycle (6 per loop) — preload, nose lift, short airborne hop, damped landing. Nose stays slightly raised at rest.
  const cycle=(t%4)/4;const pulse=(a:number,b:number)=>cycle>a&&cycle<b?Math.sin((cycle-a)/(b-a)*Math.PI):0;
@@ -204,7 +232,7 @@ return{supportsTransparency:false,root,duration:DURATION,background:'#f3c7d6',ta
  const suspension=.0+.06*lift-.03*landing;const pitch=.008+.045*lift-.02*landing;
  car.root.position.y=rideY+hop;car.update(phase*ROLL_TURNS*R/WHEEL_RADIUS,suspension);car.chassis.rotation.x=-pitch;car.chassis.rotation.z=.012*Math.sin(phase*6);
  car.suspensions.forEach((s,i)=>{s.position.y=wheelRest[i]+(s.position.z>0?.05*lift:0)});
- root.userData.motion={hop,suspension,pitch,cycle};
+ root.userData.motion={hop,suspension,pitch,cycle};contactMat.opacity=.7*Math.max(.25,1-hop*5);focusPoint.set(.8,rideY+hop+.75,0);
  balloons.forEach((b,i)=>{b.group.position.copy(b.base);b.group.position.y+=.35*Math.sin(phase+b.phase*3);b.group.position.x+=.25*Math.sin(phase*2+i);b.group.rotation.z=.02*Math.sin(phase+i)});
  let n=0;
  for(const p of swirl){const age=(u*p.fall+p.phase)%1;const a=p.a+phase*(p.r<7?p.turns:1); /* integer turns per loop keeps the cash cloud seamless */dummy.position.set(Math.cos(a)*p.r,16-age*13+.5*Math.sin(age*TAU*3),Math.sin(a)*p.r*.85);dummy.rotation.set(age*TAU*3+p.spin,p.spin+phase*2,Math.sin(age*TAU*2+p.spin));dummy.scale.setScalar(p.s);dummy.updateMatrix();bills.setMatrixAt(n++,dummy.matrix)}
@@ -221,4 +249,5 @@ return{supportsTransparency:false,root,duration:DURATION,background:'#f3c7d6',ta
  const w=t/DURATION*TAU;pos.x+=.05*Math.sin(w*7)+.02*Math.sin(w*19);pos.y+=.04*Math.sin(w*9+1)+.015*Math.sin(w*23);aim.y+=.03*Math.sin(w*11+2);
  if(c.aspect<.8)pos.sub(aim).multiplyScalar(1.5).add(aim);
  if(Math.abs(c.fov-fov)>.01){c.fov=fov;c.updateProjectionMatrix()}c.position.copy(pos);c.lookAt(aim);
+ (bokeh.uniforms as any).focus.value=pos.distanceTo(focusPoint);(grade.uniforms as any).time.value=t%1;
 }}},o)}}
