@@ -3,7 +3,6 @@ import {Experience,type SceneOptions,type World} from '../runtime';
 import {light,v,TAU,mesh,canvasTexture,random} from '../shared';
 import {batchRigid} from '../optimize';
 import {createClassicCar,WHEEL_RADIUS,WHEEL_Z} from '../assets/classic';
-import {BokehPass} from 'three/addons/postprocessing/BokehPass.js';
 import {ShaderPass} from 'three/addons/postprocessing/ShaderPass.js';
 
 /** Filmic finish in linear HDR before OutputPass: magenta shadow lift, warm highlights, slight saturation, vignette, fine grain. */
@@ -46,38 +45,56 @@ const SHOT={
 function inShot(s:Shot,along:number,right:number,up:number):[number,number,number]{const p=new T.Vector3(...s.pos),d=new T.Vector3(...s.aim).sub(p).normalize();const r=new T.Vector3().crossVectors(d,new T.Vector3(0,1,0)).normalize();const u=new T.Vector3().crossVectors(r,d);const w=p.add(d.multiplyScalar(along)).add(r.multiplyScalar(right)).add(u.multiplyScalar(up));return [w.x,w.y,w.z]}
 
 // ---------- textures ----------
-const INK='#1c2a24',INK2='#2c3b33',PAPER='#dcd2bd';
-/** Fictional banknote in the visual language of a large-denomination note: guilloche border, portrait oval, seals, big numerals. */
-function banknoteCanvas(){const c=document.createElement('canvas');c.width=2048;c.height=880;const g=c.getContext('2d')!;
+const INK='#17241d',GREEN='#2d6a47',PAPER='#e6e2cf';
+/** Hundred-dollar-style note (classic large-portrait series): ornate border, headline, portrait oval, black FR seal, green Treasury seal, green serials, corner 100s. */
+function banknoteCanvas(){const c=document.createElement('canvas');c.width=2048;c.height=880;const g=c.getContext('2d')!;const rng=random(7);
  g.fillStyle=PAPER;g.fillRect(0,0,2048,880);
- // paper fibres + faint wash
- const rng=random(7);for(let i=0;i<5000;i++){g.fillStyle=`rgba(${rng()<.5?'120,90,110':'90,120,100'},${.04+rng()*.06})`;g.fillRect(rng()*2048,rng()*880,1+rng()*14,1)}
- const grd=g.createLinearGradient(0,0,2048,0);grd.addColorStop(0,'rgba(210,170,170,.25)');grd.addColorStop(.5,'rgba(255,255,255,0)');grd.addColorStop(1,'rgba(200,180,150,.25)');g.fillStyle=grd;g.fillRect(0,0,2048,880);
- g.strokeStyle=INK;g.fillStyle=INK;
- // border: double frame + guilloche rope
- g.lineWidth=10;g.strokeRect(24,24,2000,832);g.lineWidth=3;g.strokeRect(46,46,1956,788);
- g.lineWidth=1.6;for(let k=0;k<6;k++){g.beginPath();for(let x=50;x<=1998;x+=2){const y=60+k*2+7*Math.sin(x*.09+k)*Math.cos(x*.013);x===50?g.moveTo(x,y):g.lineTo(x,y)}g.stroke();g.beginPath();for(let x=50;x<=1998;x+=2){const y=820-k*2+7*Math.sin(x*.09+k)*Math.cos(x*.013);x===50?g.moveTo(x,y):g.lineTo(x,y)}g.stroke()}
- // fine background lathe-work
- g.globalAlpha=.5;g.lineWidth=1.6;for(let i=0;i<60;i++){g.beginPath();for(let x=60;x<1990;x+=4){const y=95+i*11.5+5*Math.sin(x*.021+i*.7);x===60?g.moveTo(x,y):g.lineTo(x,y)}g.stroke()}g.globalAlpha=1;
- // portrait oval (generic engraved bust, hatched) – centre
- g.save();g.translate(1024,440);g.fillStyle=PAPER;g.beginPath();g.ellipse(0,0,230,300,0,0,TAU);g.fill();
- g.lineWidth=2;for(let i=0;i<14;i++){g.beginPath();g.ellipse(0,0,232+i*5,302+i*5,0,0,TAU);g.globalAlpha=.55;g.stroke()}g.globalAlpha=1;
- g.beginPath();g.ellipse(0,0,220,290,0,0,TAU);g.clip();
- g.fillStyle=INK2;g.beginPath();g.ellipse(-8,-60,105,135,-.08,0,TAU);g.fill(); // head
- g.beginPath();g.moveTo(-230,300);g.bezierCurveTo(-200,90,-120,70,-10,80);g.bezierCurveTo(110,70,210,100,240,300);g.fill(); // shoulders
- g.strokeStyle=PAPER;g.lineWidth=2;for(let y=-300;y<300;y+=9){g.beginPath();g.moveTo(-240,y);g.lineTo(240,y+40);g.stroke()} // engraving hatch
- g.fillStyle=PAPER;g.globalAlpha=.65;g.beginPath();g.ellipse(-40,-80,40,60,-.3,0,TAU);g.fill();g.globalAlpha=1;g.restore();
- // seals
- const seal=(x:number,y:number,r:number,teeth:number,label:string)=>{g.save();g.translate(x,y);g.beginPath();for(let i=0;i<=teeth*2;i++){const a=i/(teeth*2)*TAU,rr=i%2?r:r*.9;g.lineTo(Math.cos(a)*rr,Math.sin(a)*rr)}g.fillStyle=INK;g.fill();g.fillStyle=PAPER;g.beginPath();g.arc(0,0,r*.78,0,TAU);g.fill();g.strokeStyle=INK;g.lineWidth=3;for(let i=0;i<5;i++){g.beginPath();g.arc(0,0,r*(.72-i*.1),0,TAU);g.stroke()}g.fillStyle=INK;g.font=`bold ${r*.55}px Georgia`;g.textAlign='center';g.textBaseline='middle';g.fillText(label,0,4);g.restore()};
- seal(560,470,120,40,'F');seal(1490,520,112,48,'◆');
- // headline + denominations (fictional wording)
- g.fillStyle=INK;g.textAlign='center';g.textBaseline='alphabetic';g.font='bold 92px Georgia';g.fillText('THE UNITED STATES OF IMAGINATION',1024,150);
- g.font='italic 40px Georgia';g.fillText('FEDERAL RESERVE OF DREAMS',1024,205);
- g.font='bold 210px Georgia';g.fillText('100',230,300);g.fillText('100',1820,300);g.fillText('100',1820,800);
- g.save();g.translate(230,790);g.font='bold 150px Georgia';g.fillText('100',0,0);g.restore();
- g.font='bold 96px Georgia';g.fillText('ONE HUNDRED',1024,815);
- g.font='bold 60px Courier New';g.fillText('FL 17559462 A',470,700);g.fillText('FL 17559462 A',1590,250);
- g.font='34px Georgia';g.fillText('IN DREAMS WE TRUST',1024,760);g.font='28px Courier New';g.fillText('ART PROP — NOT LEGAL TENDER',1500,650);
+ // paper: faint green tint, red/blue security fibres, soft ageing at the edges
+ const wash=g.createRadialGradient(1024,440,200,1024,440,1150);wash.addColorStop(0,'rgba(220,235,215,.35)');wash.addColorStop(1,'rgba(170,160,120,.35)');g.fillStyle=wash;g.fillRect(0,0,2048,880);
+ for(let i=0;i<900;i++){g.strokeStyle=rng()<.5?'rgba(170,40,50,.35)':'rgba(40,60,160,.35)';g.lineWidth=1;const x=rng()*2048,y=rng()*880;g.beginPath();g.moveTo(x,y);g.lineTo(x+(rng()-.5)*14,y+(rng()-.5)*14);g.stroke()}
+ g.textAlign='center';g.textBaseline='alphabetic';
+ // ornate border: heavy outer frame, inner line, rope of guilloche loops
+ g.strokeStyle=INK;g.lineWidth=14;g.strokeRect(22,22,2004,836);g.lineWidth=3;g.strokeRect(48,48,1952,784);g.strokeRect(58,58,1932,764);
+ g.lineWidth=1.4;for(const [y0,dir] of [[38,1],[842,-1]] as [number,number][]){for(let k=0;k<3;k++){g.beginPath();for(let x=30;x<=2018;x+=2){const y=y0+dir*(Math.sin(x*.11+k*2.1)*5+k)*1;x===30?g.moveTo(x,y):g.lineTo(x,y)}g.stroke()}}
+ for(const [x0,dir] of [[38,1],[2010,-1]] as [number,number][]){for(let k=0;k<3;k++){g.beginPath();for(let y=30;y<=850;y+=2){const x=x0+dir*(Math.sin(y*.11+k*2.1)*5+k);y===30?g.moveTo(x,y):g.lineTo(x,y)}g.stroke()}}
+ // background lathe-work: fine green wave lines + rosettes behind the numerals
+ g.strokeStyle='rgba(45,106,71,.38)';g.lineWidth=1.1;for(let i=0;i<70;i++){g.beginPath();for(let x=66;x<1984;x+=4){const y=70+i*10.6+4*Math.sin(x*.018+i*.6)+2*Math.sin(x*.07);x===66?g.moveTo(x,y):g.lineTo(x,y)}g.stroke()}
+ const rosette=(x:number,y:number,r:number)=>{g.save();g.translate(x,y);g.strokeStyle='rgba(23,36,29,.75)';g.lineWidth=1.2;for(let k=0;k<36;k++){g.rotate(TAU/36);g.beginPath();g.ellipse(r*.5,0,r*.5,r*.18,0,0,TAU);g.stroke()}g.restore()};
+ for(const [x,y] of [[190,190],[1858,190],[190,690],[1858,690]])rosette(x,y,120);
+ // corner numerals (bottom right is the large one)
+ g.fillStyle=INK;g.font='bold 150px Georgia';for(const [x,y] of [[190,240],[1858,240],[190,740]])g.fillText('100',x,y);
+ g.fillStyle=GREEN;g.font='bold 190px Georgia';g.fillText('100',1810,790);
+ // headline and subtitle
+ g.fillStyle=INK;g.font='bold 96px Georgia';g.fillText('THE UNITED STATES OF AMERICA',1024,150);
+ g.font='bold 40px Georgia';g.fillText('FEDERAL RESERVE NOTE',560,215);
+ g.font='26px Georgia';g.fillText('THIS NOTE IS LEGAL TENDER',520,560);g.fillText('FOR ALL DEBTS, PUBLIC AND PRIVATE',520,592);
+ // portrait oval: heavy ornamental frame, engraved bust with dense hatching, name scroll beneath
+ g.save();g.translate(1024,440);
+ for(let i=0;i<22;i++){g.strokeStyle=i%3?'rgba(23,36,29,.55)':INK;g.lineWidth=i%3?1.4:3;g.beginPath();g.ellipse(0,0,250+i*4.5,300+i*4.5,0,0,TAU);g.stroke()}
+ g.fillStyle='#d9d6c2';g.beginPath();g.ellipse(0,0,248,298,0,0,TAU);g.fill();g.beginPath();g.ellipse(0,0,248,298,0,0,TAU);g.clip();
+ g.strokeStyle='rgba(23,36,29,.5)';g.lineWidth=1.2;for(let y=-300;y<300;y+=6){g.beginPath();g.moveTo(-260,y);g.lineTo(260,y);g.stroke()}
+ g.fillStyle=INK;g.beginPath();g.moveTo(-250,300);g.bezierCurveTo(-230,120,-150,70,-40,60);g.lineTo(40,60);g.bezierCurveTo(150,70,230,120,250,300);g.fill(); // coat + shoulders
+ g.fillStyle='#e9e5d3';g.beginPath();g.moveTo(-45,62);g.lineTo(0,170);g.lineTo(45,62);g.fill(); // collar / cravat
+ g.fillStyle='#4a5a50';g.beginPath();g.ellipse(-6,-55,108,138,-.05,0,TAU);g.fill(); // head
+ g.fillStyle='#2a3830';g.beginPath();g.ellipse(-10,-120,118,92,0,Math.PI*1.02,Math.PI*1.98);g.fill();g.beginPath();g.ellipse(-110,-20,40,110,.15,0,TAU);g.fill();g.beginPath();g.ellipse(100,-20,40,110,-.15,0,TAU);g.fill(); // long hair at the sides
+ g.fillStyle='rgba(233,229,211,.55)';g.beginPath();g.ellipse(-30,-70,46,70,-.2,0,TAU);g.fill(); // highlight on the face
+ g.strokeStyle='rgba(23,36,29,.65)';g.lineWidth=1.6;for(let y=-200;y<300;y+=7){g.beginPath();g.moveTo(-260,y+40);g.lineTo(260,y-40);g.stroke()} // engraving cross-hatch
+ g.restore();
+ g.fillStyle=PAPER;g.fillRect(900,760,248,40);g.strokeStyle=INK;g.lineWidth=2;g.strokeRect(900,760,248,40);g.fillStyle=INK;g.font='bold 26px Georgia';g.fillText('FRANKLIN',1024,789);
+ // black Federal Reserve seal (left) and green Treasury seal (right)
+ const seal=(x:number,y:number,r:number,teeth:number,col:string,ring:string,mid:string)=>{g.save();g.translate(x,y);g.beginPath();for(let i=0;i<=teeth*2;i++){const a=i/(teeth*2)*TAU,rr=i%2?r:r*.9;g.lineTo(Math.cos(a)*rr,Math.sin(a)*rr)}g.fillStyle=col;g.fill();g.fillStyle=PAPER;g.beginPath();g.arc(0,0,r*.8,0,TAU);g.fill();g.strokeStyle=col;g.lineWidth=3;g.beginPath();g.arc(0,0,r*.78,0,TAU);g.stroke();g.beginPath();g.arc(0,0,r*.52,0,TAU);g.stroke();
+  g.fillStyle=col;g.font=`bold ${r*.13}px Georgia`;const chars=ring.split('');chars.forEach((ch,i)=>{g.save();g.rotate(-Math.PI*.85+i/chars.length*Math.PI*1.7);g.translate(0,-r*.6);g.fillText(ch,0,0);g.restore()});
+  g.font=`bold ${r*.6}px Georgia`;g.textBaseline='middle';g.fillText(mid,0,4);g.textBaseline='alphabetic';g.restore()};
+ seal(560,400,118,40,INK,'FEDERAL RESERVE BANK','B');
+ seal(1490,500,112,48,GREEN,'THE DEPARTMENT OF THE TREASURY','⚖');
+ // green serial numbers, check letter, plate position
+ g.fillStyle=GREEN;g.font='bold 58px Courier New';g.fillText('AB 17559462 C',500,690);g.fillText('AB 17559462 C',1560,280);
+ g.fillStyle=INK;g.font='bold 34px Georgia';g.fillText('B 2',330,330);g.fillText('B 2',1720,620);
+ // denomination line
+ g.font='bold 92px Georgia';g.fillText('ONE HUNDRED DOLLARS',1024,846-30);
+ // signatures
+ g.strokeStyle=INK;g.lineWidth=2.5;for(const x0 of [470,1440]){g.beginPath();for(let x=0;x<230;x+=3){const y=640+12*Math.sin(x*.09)+6*Math.sin(x*.31);x===0?g.moveTo(x0+x,y+80):g.lineTo(x0+x,y+80)}g.stroke()}
+ g.font='20px Georgia';g.fillText('TREASURER OF THE UNITED STATES',585,760);g.fillText('SECRETARY OF THE TREASURY',1555,760);
  return c}
 /** Roll end: tightly wound, slightly ragged paper layers, cream to warm yellow. */
 function rollEndTexture(){return canvasTexture(1024,1024,g=>{const rng=random(11);g.fillStyle='#e9d3a8';g.fillRect(0,0,1024,1024);
@@ -125,7 +142,7 @@ function balloon(parent:T.Object3D,pos:[number,number,number],scale:number,tex:T
  basket.updateMatrixWorld(true);
  return{group:g,basket:v(pos[0],pos[1]+BASKET_Y*scale,pos[2]),base:v(...pos),phase}}
 
-export class MoneyCarScene extends Experience{constructor(el:HTMLElement,o:SceneOptions={}){super(el,async(scene,renderer,options,camera):Promise<World>=>{
+export class MoneyCarScene extends Experience{constructor(el:HTMLElement,o:SceneOptions={}){super(el,async(scene,renderer,options):Promise<World>=>{
 const root=new T.Group();const low=options.quality==='low';
 renderer.toneMappingExposure=.82;
 
@@ -160,7 +177,7 @@ const sky=mesh(new T.SphereGeometry(400,64,32),skyMat,scene);sky.castShadow=sky.
 const envScene=new T.Scene();envScene.add(new T.Mesh(new T.SphereGeometry(50,48,24),skyMat));const envGround=new T.Mesh(new T.CircleGeometry(40,48),new T.MeshBasicMaterial({color:'#3a2632'}));envGround.rotation.x=-Math.PI/2;envGround.position.y=-2.5;envScene.add(envGround);
 // Bright horizon strip + sun card: gives the paint and chrome the long crisp highlight streaks seen in the reference.
 const strip=new T.Mesh(new T.CylinderGeometry(30,30,1.6,64,1,true),new T.MeshBasicMaterial({color:new T.Color(1.3,.75,.72),side:T.BackSide}));strip.position.y=.6;envScene.add(strip);
-const sunCard=new T.Mesh(new T.PlaneGeometry(10,4),new T.MeshBasicMaterial({color:new T.Color(3.2,1.6,.8),side:T.DoubleSide}));sunCard.position.copy(SUN_DIR).multiplyScalar(28);sunCard.lookAt(0,0,0);envScene.add(sunCard);const pm=new T.PMREMGenerator(renderer);const envRT=pm.fromScene(envScene,.01);scene.environment=envRT.texture;pm.dispose();
+const sunCard=new T.Mesh(new T.PlaneGeometry(6,2.5),new T.MeshBasicMaterial({color:new T.Color(1.8,.9,.45),side:T.DoubleSide}));sunCard.position.copy(SUN_DIR).multiplyScalar(28);sunCard.lookAt(0,0,0);envScene.add(sunCard);const pm=new T.PMREMGenerator(renderer);const envRT=pm.fromScene(envScene,.01);scene.environment=envRT.texture;pm.dispose();
 scene.fog=new T.FogExp2('#c46a86',.0055);
 scene.add(new T.HemisphereLight('#ff9fc0','#4a1c34',.75));
 const sunLight=light(scene,'#ff9a52',3.8,[SUN_DIR.x*30,SUN_DIR.y*30+4,SUN_DIR.z*30],!low);sunLight.shadow.camera.left=-9;sunLight.shadow.camera.right=9;sunLight.shadow.camera.top=9;sunLight.shadow.camera.bottom=-9;sunLight.shadow.camera.far=80;sunLight.target.position.set(0,5,0);scene.add(sunLight.target);
@@ -168,7 +185,7 @@ light(scene,'#ffb0cc',.9,[10,9,2]);light(scene,'#d0609a',.6,[-6,3,9]);
 
 // ---------- the money roll ----------
 const noteCanvas=banknoteCanvas();const noteTex=new T.CanvasTexture(noteCanvas);noteTex.colorSpace=T.SRGBColorSpace;noteTex.anisotropy=8;
-const paper=new T.MeshStandardMaterial({map:noteTex,bumpMap:noteTex,bumpScale:-2.5,roughness:.72,color:'#f0d2cc',side:T.DoubleSide});
+const paper=new T.MeshStandardMaterial({map:noteTex,bumpMap:noteTex,bumpScale:-2.5,roughness:.72,color:'#f6e2dc',side:T.DoubleSide});
 const paperEdge=new T.MeshStandardMaterial({color:'#f2e3c6',roughness:.9,side:T.DoubleSide});
 const endMat=new T.MeshStandardMaterial({map:rollEndTexture(),roughness:.95,color:'#ffe4d0',side:T.DoubleSide});
 const bandMat=new T.MeshPhysicalMaterial({color:'#b86a35',roughness:.6,clearcoat:.4,sheen:.6,sheenColor:new T.Color('#ffc58a')});
@@ -222,9 +239,9 @@ const swirl=Array.from({length:SWIRL},()=>({r:2.5+rng()*13,a:rng()*TAU,y:rng(),t
 const trail=TRAIL_SRC.flatMap(b=>Array.from({length:TRAIL_PER},()=>({b,phase:rng(),dx:(rng()-.5),dz:(rng()-.5),spin:rng()*TAU,s:.6+rng()*.5})));
 const dummy=new T.Object3D();
 
-// Depth of field focused on the car + filmic grade (composer path only; low quality renders without them).
-const bokeh=new BokehPass(scene,camera,{focus:10,aperture:.0011,maxblur:.0055});const grade=new ShaderPass(GradeShader);const focusPoint=v(0,5.5,0);
-return{supportsTransparency:false,root,duration:DURATION,background:'#7a2f52',target:v(0,5.5,0),distance:11,bloom:.5,postPasses:[bokeh,grade],dispose:()=>{envRT.dispose();bokeh.dispose();grade.dispose()},update(t){const u=t/DURATION,phase=u*TAU;
+// Filmic grade (composer path only; low quality renders without it).
+const grade=new ShaderPass(GradeShader);
+return{supportsTransparency:false,root,duration:DURATION,background:'#7a2f52',target:v(0,5.5,0),distance:11,bloom:.5,postPasses:[grade],dispose:()=>{envRT.dispose();grade.dispose()},update(t){const u=t/DURATION,phase=u*TAU;
  roll.rotation.z=phase*ROLL_TURNS;
  // Hydraulics: 4 s cycle (6 per loop) — preload, nose lift, short airborne hop, damped landing. Nose stays slightly raised at rest.
  const cycle=(t%4)/4;const pulse=(a:number,b:number)=>cycle>a&&cycle<b?Math.sin((cycle-a)/(b-a)*Math.PI):0;
@@ -232,7 +249,7 @@ return{supportsTransparency:false,root,duration:DURATION,background:'#7a2f52',ta
  const suspension=.0+.06*lift-.03*landing;const pitch=.008+.045*lift-.02*landing;
  car.root.position.y=rideY+hop;car.update(phase*ROLL_TURNS*R/WHEEL_RADIUS,suspension);car.chassis.rotation.x=-pitch;car.chassis.rotation.z=.012*Math.sin(phase*6);
  car.suspensions.forEach((s,i)=>{s.position.y=wheelRest[i]+(s.position.z>0?.05*lift:0)});
- root.userData.motion={hop,suspension,pitch,cycle};contactMat.opacity=.7*Math.max(.25,1-hop*5);focusPoint.set(.8,rideY+hop+.75,0);
+ root.userData.motion={hop,suspension,pitch,cycle};contactMat.opacity=.7*Math.max(.25,1-hop*5);
  balloons.forEach((b,i)=>{b.group.position.copy(b.base);b.group.position.y+=.35*Math.sin(phase+b.phase*3);b.group.position.x+=.25*Math.sin(phase*2+i);b.group.rotation.z=.02*Math.sin(phase+i)});
  let n=0;
  for(const p of swirl){const age=(u*p.fall+p.phase)%1;const a=p.a+phase*(p.r<7?p.turns:1); /* integer turns per loop keeps the cash cloud seamless */dummy.position.set(Math.cos(a)*p.r,16-age*13+.5*Math.sin(age*TAU*3),Math.sin(a)*p.r*.85);dummy.rotation.set(age*TAU*3+p.spin,p.spin+phase*2,Math.sin(age*TAU*2+p.spin));dummy.scale.setScalar(p.s);dummy.updateMatrix();bills.setMatrixAt(n++,dummy.matrix)}
@@ -249,5 +266,5 @@ return{supportsTransparency:false,root,duration:DURATION,background:'#7a2f52',ta
  const w=t/DURATION*TAU;pos.x+=.05*Math.sin(w*7)+.02*Math.sin(w*19);pos.y+=.04*Math.sin(w*9+1)+.015*Math.sin(w*23);aim.y+=.03*Math.sin(w*11+2);
  if(c.aspect<.8)pos.sub(aim).multiplyScalar(1.5).add(aim);
  if(Math.abs(c.fov-fov)>.01){c.fov=fov;c.updateProjectionMatrix()}c.position.copy(pos);c.lookAt(aim);
- (bokeh.uniforms as any).focus.value=pos.distanceTo(focusPoint);(grade.uniforms as any).time.value=t%1;
+ (grade.uniforms as any).time.value=t%1;
 }}},o)}}

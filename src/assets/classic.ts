@@ -25,7 +25,7 @@ export function createClassicCar(): {
   const under = new THREE.MeshStandardMaterial({ color: '#1d1a1c', roughness: .85, side: THREE.DoubleSide });
   const rubber = new THREE.MeshStandardMaterial({ color: '#141214', roughness: .82 });
   const glass = new THREE.MeshPhysicalMaterial({ color: '#6a4590', metalness: .45, roughness: .04, transparent: true, opacity: .8, side: THREE.DoubleSide, depthWrite: false, clearcoat: 1 });
-  const lens = new THREE.MeshPhysicalMaterial({ color: '#fff6e0', emissive: '#ffe2b0', emissiveIntensity: .08, roughness: .25, metalness: .1, clearcoat: .3 });
+  const lens = new THREE.MeshPhysicalMaterial({ color: '#cfc5c8', emissive: '#ffe2b0', emissiveIntensity: .03, roughness: .12, metalness: .45, clearcoat: .6 });
   const tail = new THREE.MeshPhysicalMaterial({ color: '#c0101c', emissive: '#ff1d2a', emissiveIntensity: 1.1, roughness: .15, clearcoat: 1 });
   const leather = new THREE.MeshStandardMaterial({ color: '#efe6da', roughness: .6 });
   const skin = new THREE.MeshStandardMaterial({ color: '#efe9e4', roughness: .45 });
@@ -131,33 +131,35 @@ export function createClassicCar(): {
   const V = (x: number, y: number, dz: number) => new THREE.Vector3(x, y, fz(x) + dz);
   const yaw = (x: number) => -Math.atan2(fz(x + .01) - fz(x - .01), .02); // face along the V-shaped plan
   const across = (y: number, dz: number, x0 = -1, x1 = 1, n = 12) => Array.from({ length: n + 1 }, (_, i) => V(x0 + (x1 - x0) * i / n, y, dz));
-  // Dark grille cavity following the V plan (upper tier between the lamps, lower tier full width).
-  const cavity = (x0: number, x1: number, y0: number, y1: number) => surface((u, v) => { const x = x0 + (x1 - x0) * u; return [x, y0 + (y1 - y0) * v, fz(x) - .015]; }, 24, 2, dark);
-  cavity(-.5, .5, .785, .915); cavity(-.94, .94, .555, .745);
-  const bar = (x: number, y: number, h: number) => { const b = rbox(.009, h, .045, .003, chrome); b.position.copy(V(x, y, .01)); b.rotation.y = yaw(x); };
-  for (let i = 0; i <= 14; i++) bar(-.5 + i * 1 / 14, .85, .13);
-  for (let i = 0; i <= 26; i++) bar(-.94 + i * 1.88 / 26, .65, .19);
-  for (const y of [.785, .85, .915]) sweep(across(y, .012, -.51, .51), [[-.006, -.006], [.006, -.006], [.008, 0], [.006, .006], [-.006, .006]], chrome, 40);
-  for (const y of [.56, .65, .745]) sweep(across(y, .012, -.95, .95, 16), [[-.006, -.006], [.006, -.006], [.008, 0], [.006, .006], [-.006, .006]], chrome, 60);
-  // Heavy chrome bar between the tiers and a bright leading edge under the hood lip.
-  sweep([V(-1.0, .765, -.25), ...across(.765, .03, -.97, .97, 14), V(1.0, .765, -.25)], [[-.02, -.022], [.02, -.02], [.032, 0], [.02, .02], [-.02, .022]], chrome);
-  sweep(across(.93, .02, -.98, .98, 14), [[-.02, -.008], [.012, -.008], [.016, 0], [.012, .008], [-.02, .008]], chrome);
+  // '61 grille, matched to the reference: two single rows of upright cells, each about one lamp tall, thin satin dividers over a
+  // dark reflective cavity. Upper row sits between the lamps; a heavy chrome bar; lower row runs full width over the bumper.
+  const cell = new THREE.MeshStandardMaterial({ color: '#2b1222', metalness: .65, roughness: .32, side: THREE.DoubleSide });
+  const cavity = (x0: number, x1: number, y0: number, y1: number) => surface((u, v) => { const x = x0 + (x1 - x0) * u; return [x, y0 + (y1 - y0) * v, fz(x) - .012]; }, 24, 2, cell);
+  const ribMat = new THREE.MeshStandardMaterial({ color: '#a89aa2', metalness: 1, roughness: .38 });
+  const rib = (x: number, y: number, h: number) => { const b = rbox(.005, h, .028, .002, ribMat); b.position.copy(V(x, y, .0)); b.rotation.y = yaw(x); };
+  const edge = (y: number, x0: number, x1: number) => sweep(across(y, .004, x0, x1, 12), [[-.008, -.006], [.006, -.006], [.008, 0], [.006, .006], [-.008, .006]], satin, 40);
+  const UP = [.8, .915], LO = [.63, .748];
+  cavity(-.47, .47, UP[0], UP[1]); for (let i = 0; i <= 13; i++) rib(-.47 + i * .94 / 13, (UP[0] + UP[1]) / 2, UP[1] - UP[0]); edge(UP[0], -.48, .48); edge(UP[1], -.48, .48);
+  cavity(-.93, .93, LO[0], LO[1]); for (let i = 0; i <= 25; i++) rib(-.93 + i * 1.86 / 25, (LO[0] + LO[1]) / 2, LO[1] - LO[0]); edge(LO[0], -.94, .94); edge(LO[1], -.94, .94);
+  // Heavy chrome bar between the rows (wraps the corners) and a slim bright edge under the hood lip.
+  sweep([V(-1.0, .77, -.25), ...across(.77, .025, -.97, .97, 14), V(1.0, .77, -.25)], [[-.02, -.024], [.018, -.022], [.03, 0], [.018, .022], [-.02, .024]], chrome);
+  sweep(across(.93, .012, -.97, .97, 14), [[-.02, -.006], [.01, -.006], [.013, 0], [.01, .006], [-.02, .006]], chrome);
   // Twin lamps: small, recessed in a dark socket, each with a slim chrome ring; a body-colour hood lip overhangs them.
   for (const s of [-1, 1]) {
-    const socket = add(new THREE.CircleGeometry(1, 32), dark); socket.scale.set(.25, .075, 1); socket.position.copy(V(s * .72, .85, -.012)); socket.rotation.y = yaw(s * .72);
-    for (const x of [.6, .84]) {
-      const ring = add(new THREE.TorusGeometry(.056, .009, 8, 32), chrome); ring.position.copy(V(s * x, .85, .006)); ring.rotation.y = yaw(s * x);
-      const lamp = add(new THREE.SphereGeometry(.05, 20, 12), lens); lamp.scale.z = .4; lamp.position.copy(V(s * x, .85, .0)); lamp.rotation.y = yaw(s * x);
+        for (const x of [.6, .84]) {
+      const cup = add(new THREE.CircleGeometry(.056, 24), dark); cup.position.copy(V(s * x, .85, -.004)); cup.rotation.y = yaw(s * x);
+      const ring = add(new THREE.TorusGeometry(.052, .011, 8, 32), chrome); ring.position.copy(V(s * x, .85, .006)); ring.rotation.y = yaw(s * x);
+      const lamp = add(new THREE.SphereGeometry(.044, 20, 12), lens); lamp.scale.z = .4; lamp.position.copy(V(s * x, .85, .0)); lamp.rotation.y = yaw(s * x);
     }
     const lip = sweep(across(.94, -.01, s > 0 ? .47 : -.9, s > 0 ? .9 : -.47, 8), [[-.14, -.02], [.0, -.03], [.04, -.012], [.045, .008], [.0, .022], [-.14, .02]], paint, 24); tint(lip, .95);
-    const park = add(new THREE.SphereGeometry(.034, 14, 10), lens); park.scale.z = .5; park.position.copy(V(s * .82, .65, .02));
-    const parkRing = add(new THREE.TorusGeometry(.038, .007, 8, 24), chrome); parkRing.position.copy(V(s * .82, .65, .022)); parkRing.rotation.y = yaw(s * .82);
+    const park = add(new THREE.SphereGeometry(.034, 14, 10), lens); park.scale.z = .5; park.position.copy(V(s * .84, .685, .02));
+    const parkRing = add(new THREE.TorusGeometry(.038, .007, 8, 24), chrome); parkRing.position.copy(V(s * .84, .685, .022)); parkRing.rotation.y = yaw(s * .84);
   }
   // Massive swept bumper that wraps the front corners, with a dark valance under it.
-  sweep([V(-.99, .47, -.62), V(-1.03, .47, -.2), V(-.92, .47, .06), ...across(.47, .1, -.7, .7, 8), V(.92, .47, .06), V(1.03, .47, -.2), V(.99, .47, -.62)],
+  sweep([V(-.99, .52, -.62), V(-1.03, .52, -.2), V(-.92, .52, .06), ...across(.52, .1, -.7, .7, 8), V(.92, .52, .06), V(1.03, .52, -.2), V(.99, .52, -.62)],
     [[-.03, -.085], [.04, -.085], [.08, -.06], [.1, -.015], [.095, .035], [.06, .07], [.0, .085], [-.04, .085]], chrome, 120);
-  surface((u, v) => { const x = -.9 + 1.8 * u; return [x, .36 + .05 * v, fz(x) - .02 + .05 * v]; }, 16, 1, dark);
-  const plateF = rbox(.3, .11, .015, .008, leather); plateF.position.copy(V(0, .47, .195));
+  surface((u, v) => { const x = -.9 + 1.8 * u; return [x, .38 + .06 * v, fz(x) - .02 + .06 * v]; }, 16, 1, dark);
+  const plateF = rbox(.3, .11, .015, .008, leather); plateF.position.copy(V(0, .52, .195));
   // Hood: centre crease, fender peaks and crest ornament.
   tube([[0, deckY(1.25) + .006, 1.25], [0, deckY(2.0) + .008, 2.0 + nose(0, 2.0)], [0, deckY(2.6) + .006, 2.6 + nose(0, 2.6)]], .008);
   for (const s of [-1, 1]) tube([[s * .78, deckY(1.3) - .02, 1.3], [s * .8, deckY(2.2) - .01, 2.2], [s * .78, deckY(2.65) - .02, 2.7]], .01, paint);
