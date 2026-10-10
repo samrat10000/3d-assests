@@ -75,3 +75,13 @@ The car in `src/assets/classic.ts` is rebuilt to the user's lowrider references,
   - **Rear:** a live chrome axle with a pumpkin and gold cover, lower trailing arms, upper links, a panhard bar, coils and rams. The driveshaft has U-joints.
 - **Static underside:** gold X-frame with outriggers and crossmembers, a chrome front crossmember, a ribbed bronze floor with transmission tunnel, the engine sump with fins, bellhousing and transmission, chrome dual exhaust with mufflers, the fuel tank with gold straps, and a hydraulic pump block with chrome hard lines to every corner.
 - **Motion and light:** nose hops now stand the car up harder (pitch 0.27) and three-wheel moves roll further (0.17), so the plated underside is on show. A pink bounce light from below lights it.
+
+## Dream Currency, pass 7: interior and balloons
+
+- **Driver removed.** The interior is now cream tuck-and-roll throughout: a split front bench with headrests and a rear bench, both with lime piping. It also has pleated door panels with a chrome strip, padded armrests and window cranks, a padded dash with three chrome-bezel gauges, a chrome radio and glovebox seam, and a small chrome chain steering wheel on a chrome column with a column shifter. Plum carpet, a cream headliner, a rear parcel shelf and a rear-view mirror complete it. The glass is a little clearer, so the interior reads from outside.
+- **Balloons:**
+  - Flared fabric skirt and crown ring on each envelope.
+  - A twin plated burner with coils, valves and flickering flames inside the glowing ring. The flicker uses integer loop harmonics.
+  - A square load frame on four suede-covered poles.
+  - The basket is hand-woven wicker with slightly bowed walls, corner posts, a woven floor, a padded leather rim and rope handles.
+  - The cargo is fuel tanks plus burlap money sacks with "$" printed on them, peeking over the rim. There are no passengers.

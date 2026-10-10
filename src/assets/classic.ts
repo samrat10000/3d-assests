@@ -33,13 +33,10 @@ export function createClassicCar(): {
   const under = new THREE.MeshStandardMaterial({ color: '#4a3324', metalness: .7, roughness: .35, side: THREE.DoubleSide });
   const rubber = new THREE.MeshStandardMaterial({ color: '#121012', roughness: .85, side: THREE.DoubleSide });
   const white = new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#3a3436', roughness: .5, side: THREE.DoubleSide });
-  const glass = new THREE.MeshPhysicalMaterial({ color: '#5e3f86', metalness: .45, roughness: .04, transparent: true, opacity: .8, side: THREE.DoubleSide, depthWrite: false, clearcoat: 1 });
+  const glass = new THREE.MeshPhysicalMaterial({ color: '#5e3f86', metalness: .3, roughness: .04, transparent: true, opacity: .5, side: THREE.DoubleSide, depthWrite: false, clearcoat: 1 });
   const lampGlass = new THREE.MeshPhysicalMaterial({ color: '#f6f2f4', metalness: .1, roughness: .12, transparent: true, opacity: .4, clearcoat: .3, depthWrite: false });
   const amber = new THREE.MeshPhysicalMaterial({ color: '#d9781c', emissive: '#ff7a10', emissiveIntensity: .25, roughness: .2, clearcoat: 1 });
   const tail = new THREE.MeshPhysicalMaterial({ color: '#b40f1a', emissive: '#ff1d2a', emissiveIntensity: .25, roughness: .15, clearcoat: 1 });
-  const leather = new THREE.MeshStandardMaterial({ color: '#efe6da', roughness: .6 });
-  const skin = new THREE.MeshStandardMaterial({ color: '#efe9e4', roughness: .45 });
-  const jacket = new THREE.MeshStandardMaterial({ color: '#2a1f2b', roughness: .75 });
 
   // ---------- helpers ----------
   const add = (g: THREE.BufferGeometry, m: THREE.Material, p: THREE.Object3D = chassis) => { const o = new THREE.Mesh(g, m); o.castShadow = o.receiveShadow = true; p.add(o); return o; };
@@ -191,13 +188,56 @@ export function createClassicCar(): {
     tube([[s * (ROOF_HW + .008), ROOF_Y - .004, ROOF_R + C_W * .65], [s * (ROOF_HW + .012), ROOF_Y, ROOF_F - .02]], .009);
   }
 
-  // ---------- interior + driver ----------
-  for (const z of [-.5, .3]) { const seat = rbox(1.5, .13, .5, .05, leather); seat.position.set(0, .58, z); const back = rbox(1.5, .42, .13, .05, leather); back.position.set(0, .82, z - .25); back.rotation.x = -.14; }
-  const dash = rbox(1.66, .14, .3, .05, paint); dash.position.set(0, .9, 1.0); tint(dash, .9);
-  const steer = add(new THREE.TorusGeometry(.18, .012, 10, 40), chrome); steer.position.set(-.42, 1.02, .72); steer.rotation.x = -.55;
-  const torso = rbox(.42, .5, .26, .1, jacket); torso.position.set(-.42, .9, .12); torso.rotation.x = -.12;
-  const head = add(new THREE.SphereGeometry(.12, 20, 14), skin); head.scale.set(.9, 1.1, 1); head.position.set(-.42, 1.24, .14);
-  const hair = add(new THREE.SphereGeometry(.125, 20, 12, 0, Math.PI * 2, 0, Math.PI * .5), jacket); hair.position.set(-.42, 1.26, .12);
+  // ---------- interior: cream tuck-and-roll, lime piping, dash with chrome-bezel gauges, chain steering wheel (no occupants) ----------
+  const tuck = new THREE.MeshPhysicalMaterial({ color: '#f3ead9', roughness: .5, sheen: .6, sheenColor: new THREE.Color('#fff4e0'), clearcoat: .25 });
+  const piping = new THREE.MeshStandardMaterial({ color: '#8fd41a', roughness: .35, metalness: .3 });
+  const carpet = new THREE.MeshStandardMaterial({ color: '#3b1426', roughness: .95 });
+  const pad = new THREE.MeshStandardMaterial({ color: '#2a1520', roughness: .6 });
+  const face = new THREE.MeshStandardMaterial({ color: '#0e0b10', roughness: .3, metalness: .4 });
+  surface((u, v) => [lerp(-.84, .84, u), .37, lerp(-1.45, 1.15, v)], 2, 2, carpet);
+  /** Bench with tuck-and-roll: a padded base, rolls running front-to-back on the cushion and up the backrest, piping on every edge. */
+  const bench = (z: number, w: number, split: boolean) => {
+    const base = rbox(w, .16, .5, .05, tuck); base.position.set(0, .48, z);
+    const rolls = Math.round(w / .075);
+    for (let i = 0; i < rolls; i++) {
+      const x = -w / 2 + (i + .5) * w / rolls; if (split && Math.abs(x) < .05) continue;
+      const r = add(new THREE.CapsuleGeometry(.033, .36, 4, 10), tuck); r.rotation.x = Math.PI / 2; r.position.set(x, .575, z + .02);
+      const b = add(new THREE.CapsuleGeometry(.033, .36, 4, 10), tuck); b.position.set(x, .8, z - .24); b.rotation.x = -.16;
+    }
+    const back = rbox(w, .5, .09, .04, tuck); back.position.set(0, .79, z - .29); back.rotation.x = -.16;
+    const edge = (pts: [number, number, number][]) => tube(pts, .012, piping);
+    edge([[-w / 2, .6, z + .25], [0, .605, z + .26], [w / 2, .6, z + .25]]); edge([[-w / 2, 1.04, z - .32], [0, 1.05, z - .33], [w / 2, 1.04, z - .32]]);
+    for (const s of [-1, 1]) edge([[s * w / 2, .6, z + .25], [s * w / 2, .61, z - .2], [s * w / 2, 1.04, z - .32]]);
+    if (split) for (const s of [-1, 1]) { const hr = rbox(.3, .14, .08, .035, tuck); hr.position.set(s * .38, 1.1, z - .34); hr.rotation.x = -.16; }
+  };
+  bench(.22, 1.5, true); bench(-.78, 1.6, false);
+  // Door panels: pleated cream inserts, chrome strip, padded armrest, window crank.
+  for (const s of [-1, 1]) {
+    const x = s * .855;
+    surface((u, v) => [x, lerp(.45, .88, v), lerp(-1.3, 1.05, u)], 2, 2, tuck);
+    for (let i = 0; i < 6; i++) tube([[x - s * .012, .52 + i * .055, -1.25], [x - s * .014, .52 + i * .055, 1.0]], .018, tuck);
+    tube([[x - s * .02, .86, -1.3], [x - s * .022, .86, 1.05]], .007, chrome);
+    const arm = rbox(.07, .06, .5, .025, pad); arm.position.set(x - s * .05, .66, .3);
+    const crank = add(new THREE.TorusGeometry(.03, .006, 6, 16), chrome); crank.position.set(x - s * .03, .78, .62); crank.rotation.y = Math.PI / 2;
+  }
+  // Dash: padded top, body-colour face with a chrome strip, three round gauges, chrome radio, glovebox seam.
+  const dashTop = rbox(1.66, .06, .32, .03, pad); dashTop.position.set(0, .95, 1.0);
+  const dashFace = rbox(1.66, .2, .08, .03, paint); dashFace.position.set(0, .84, .86); tint(dashFace, .9);
+  tube([[-.82, .8, .815], [0, .8, .812], [.82, .8, .815]], .006, chrome);
+  for (const gx of [-.56, -.42, -.28]) { const g = add(new THREE.CircleGeometry(.05, 24), face); g.position.set(gx, .87, .814); g.rotation.y = Math.PI; const b = add(new THREE.TorusGeometry(.053, .008, 8, 28), chrome); b.position.set(gx, .87, .813); const n = rbox(.004, .04, .002, .001, amber); n.position.set(gx + .01, .88, .81); n.rotation.z = .8; }
+  const radio = rbox(.22, .06, .02, .008, chrome); radio.position.set(.05, .86, .815);
+  tube([[.3, .78, .814], [.6, .78, .814], [.6, .9, .814], [.3, .9, .814], [.3, .78, .814]], .003, dark);
+  // Small chrome chain steering wheel on a chrome column with a column shifter.
+  const wheelGroup = new THREE.Group(); wheelGroup.position.set(-.42, .9, .62); wheelGroup.rotation.x = -.5; chassis.add(wheelGroup);
+  for (let i = 0; i < 30; i++) { const a = i / 30 * Math.PI * 2; const l = add(new THREE.TorusGeometry(.016, .005, 6, 12), chrome, wheelGroup); l.position.set(Math.cos(a) * .14, Math.sin(a) * .14, 0); l.rotation.z = a + Math.PI / 2; l.rotation.y = i % 2 ? Math.PI / 2 : 0; l.scale.x = 1.4; }
+  for (let i = 0; i < 3; i++) { const a = i / 3 * Math.PI * 2 + Math.PI / 2; rod(new THREE.Vector3(0, 0, 0), new THREE.Vector3(Math.cos(a) * .13, Math.sin(a) * .13, 0), .007, chrome, wheelGroup, 6); }
+  const hubCap = add(new THREE.CylinderGeometry(.035, .035, .03, 20), chrome, wheelGroup); hubCap.rotation.x = Math.PI / 2;
+  rod(new THREE.Vector3(-.42, .9, .62), new THREE.Vector3(-.42, .82, .86), .02, chrome, chassis, 12);
+  rod(new THREE.Vector3(-.36, .86, .74), new THREE.Vector3(-.2, .82, .7), .006, chrome, chassis, 6);
+  // Headliner, rear parcel shelf, mirror.
+  surface((u, v) => [(u * 2 - 1) * (ROOF_HW - .02), ROOF_Y - .015 + .03 * Math.pow(Math.sin(u * Math.PI), .4), lerp(ROOF_R + .05, ROOF_F - .03, v)], 12, 8, tuck);
+  const shelf = rbox(1.6, .02, .4, .01, pad); shelf.position.set(0, .93, -1.3);
+  const mirror = rbox(.22, .06, .02, .015, chrome); mirror.position.set(0, 1.22, .62); rod(new THREE.Vector3(0, 1.32, .52), new THREE.Vector3(0, 1.24, .61), .006, chrome, chassis, 6);
 
   // ---------- underside: plated X-frame, ribbed floor, drivetrain, exhaust, tank, hydraulic plumbing ----------
   // Middle of the car stays above y≈.27 (the roll bulges up between the axles); ends can hang lower.

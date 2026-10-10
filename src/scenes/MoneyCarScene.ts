@@ -125,24 +125,63 @@ function rollEnd(side:1|-1,material:T.Material,parent:T.Object3D){const g=new T.
 /** Flattened rubber band slightly off-square to the roll, as in the reference. */
 function band(z:number,tilt:number,material:T.Material,parent:T.Object3D){const t=mesh(new T.TorusGeometry(R+.04,.04,10,220),material,parent,0,0,z);t.scale.z=3.3;t.rotation.y=tilt;t.rotation.x=tilt*.6;return t}
 
-interface Balloon{group:T.Group;basket:T.Vector3;base:T.Vector3;phase:number}
-/** Hot-air balloon: gored envelope with scalloped panels, long suspension cables, stacked hoop rings (top one glowing), basket. */
-function balloon(parent:T.Object3D,pos:[number,number,number],scale:number,tex:T.Texture,phase:number,metal:T.Material,glow:T.Material,wicker:T.Material,rope:T.Material):Balloon{
- const g=new T.Group();g.position.set(...pos);g.scale.setScalar(scale);g.rotation.y=phase*2;parent.add(g);
+interface Balloon{group:T.Group;basket:T.Vector3;base:T.Vector3;phase:number;flames:T.Mesh[]}
+/** Shared look for every balloon: hand-woven wicker, padded leather, suede pole covers, plated burner, burlap money sacks. */
+function balloonKit(glow:T.Material,metal:T.Material,rope:T.Material){
+ const weave=canvasTexture(256,256,g=>{g.fillStyle='#3a1f14';g.fillRect(0,0,256,256);const rng=random(5);
+  for(let row=0;row<16;row++)for(let col=0;col<16;col++){const over=(row+col)%2===0;const x=col*16,y=row*16;const grd=over?g.createLinearGradient(x,y,x,y+16):g.createLinearGradient(x,y,x+16,y);const base=150+rng()*40;grd.addColorStop(0,`rgb(${base*.55},${base*.33},${base*.18})`);grd.addColorStop(.5,`rgb(${base},${base*.68},${base*.38})`);grd.addColorStop(1,`rgb(${base*.5},${base*.3},${base*.16})`);g.fillStyle=grd;over?g.fillRect(x+1,y+2,14,12):g.fillRect(x+2,y+1,12,14)}});
+ weave.wrapS=weave.wrapT=T.RepeatWrapping;weave.repeat.set(3,2);
+ const sackTex=canvasTexture(256,256,g=>{g.fillStyle='#b48c5a';g.fillRect(0,0,256,256);g.strokeStyle='rgba(70,45,25,.35)';for(let i=0;i<256;i+=4){g.beginPath();g.moveTo(i,0);g.lineTo(i,256);g.stroke();g.beginPath();g.moveTo(0,i);g.lineTo(256,i);g.stroke()}g.fillStyle='#2d5a3a';g.font='bold 120px Georgia';g.textAlign='center';g.textBaseline='middle';g.fillText('$',128,140)});
+ return{glow,metal,rope,
+  wicker:new T.MeshStandardMaterial({map:weave,bumpMap:weave,bumpScale:2,roughness:.92,side:T.DoubleSide}),
+  leather:new T.MeshStandardMaterial({color:'#3b2016',roughness:.55}),
+  suede:new T.MeshStandardMaterial({color:'#24161a',roughness:.95}),
+  plated:new T.MeshStandardMaterial({color:'#d8cdc6',metalness:1,roughness:.18}),
+  tank:new T.MeshStandardMaterial({color:'#5c1f22',roughness:.6}),
+  sack:new T.MeshStandardMaterial({map:sackTex,roughness:.95}),
+  flame:new T.MeshBasicMaterial({color:new T.Color(4,1.9,.6),transparent:true,opacity:.85,blending:T.AdditiveBlending,depthWrite:false}),
+  skirt:new T.MeshStandardMaterial({color:'#2a0f12',roughness:.85,side:T.DoubleSide})}}
+type Kit=ReturnType<typeof balloonKit>;
+/** Hot-air balloon: gored envelope with scalloped panels and a flared skirt, flying wires down to the stacked hoop rings
+ *  (top one glowing), a plated twin burner on a load frame, suede-covered poles and a woven basket carrying money sacks. */
+function balloon(parent:T.Object3D,pos:[number,number,number],scale:number,tex:T.Texture,phase:number,k:Kit):Balloon{
+ const g=new T.Group();g.name='balloon';g.position.set(...pos);g.scale.setScalar(scale);g.rotation.y=phase*2;parent.add(g);
  const pts:T.Vector2[]=[];for(let i=0;i<=24;i++){const t=i/24;pts.push(new T.Vector2(.24+(.98-.24)*Math.pow(Math.sin(t*Math.PI/2),1.35),t*1.5))}for(let i=1;i<=20;i++){const a=i/20*Math.PI/2;pts.push(new T.Vector2(Math.max(.001,.98*Math.cos(a)),1.5+1.05*Math.sin(a)))}
- const geo=new T.LatheGeometry(pts,96);const p=geo.getAttribute('position');for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i),a=Math.atan2(z,x);const k=1+.03*(Math.abs(Math.sin(8*a))-.63);p.setX(i,x*k);p.setZ(i,z*k)}geo.computeVertexNormals();
+ const geo=new T.LatheGeometry(pts,96);const p=geo.getAttribute('position');for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i),a=Math.atan2(z,x);const kk=1+.03*(Math.abs(Math.sin(8*a))-.63);p.setX(i,x*kk);p.setZ(i,z*kk)}geo.computeVertexNormals();
  const env=mesh(geo,new T.MeshStandardMaterial({map:tex,roughness:.62,side:T.DoubleSide}),g);env.castShadow=false;
- // skirt (scoop) + glowing mouth
- mesh(new T.CylinderGeometry(.24,.3,.22,32,1,true),new T.MeshStandardMaterial({color:'#2a0f12',roughness:.8,side:T.DoubleSide}),g,0,-.1,0);
+ mesh(new T.CylinderGeometry(.08,.08,.04,16),k.metal,g,0,2.56,0); // crown ring
+ // Flared fabric skirt below the throat.
+ mesh(new T.LatheGeometry([new T.Vector2(.24,0),new T.Vector2(.26,-.12),new T.Vector2(.31,-.3),new T.Vector2(.36,-.42)],48),k.skirt,g);
  const RING_Y=[-1.45,-1.66,-1.87,-2.08],RING_R=[.33,.31,.31,.29];
- RING_Y.forEach((y,i)=>mesh(new T.TorusGeometry(RING_R[i],i===0?.026:.016,8,48),i===0?glow:metal,g,0,y,0).rotation.x=Math.PI/2);
- for(let i=0;i<16;i++){const a=i/16*TAU;const top=v(Math.cos(a)*.62,.55,Math.sin(a)*.62);const mid=v(Math.cos(a)*.5,-.4,Math.sin(a)*.5);const bot=v(Math.cos(a)*RING_R[0],RING_Y[0],Math.sin(a)*RING_R[0]);const c=mesh(new T.TubeGeometry(new T.CatmullRomCurve3([top,mid,bot]),12,.006,4),rope,g);c.castShadow=false}
- for(let i=0;i<6;i++){const a=i/6*TAU;mesh(new T.TubeGeometry(new T.LineCurve3(v(Math.cos(a)*.31,RING_Y[0],Math.sin(a)*.31),v(Math.cos(a)*.29,RING_Y[3],Math.sin(a)*.29)),1,.008,4),metal,g)}
- const BASKET_Y=-2.42;for(const [x,z] of [[-.17,-.17],[.17,-.17],[-.17,.17],[.17,.17]])mesh(new T.TubeGeometry(new T.LineCurve3(v(x*1.5,RING_Y[3],z*1.5),v(x,BASKET_Y+.16,z)),1,.006,4),rope,g);
- const basket=mesh(new T.BoxGeometry(.42,.32,.42),wicker,g,0,BASKET_Y,0);mesh(new T.TorusGeometry(.23,.025,6,4),wicker,g,0,BASKET_Y+.17,0).rotation.set(Math.PI/2,0,Math.PI/4);
- mesh(new T.SphereGeometry(.09,10,8),new T.MeshStandardMaterial({color:'#3a2b33',roughness:.8}),g,.06,BASKET_Y+.24,0); // passenger / cargo silhouette
- basket.updateMatrixWorld(true);
- return{group:g,basket:v(pos[0],pos[1]+BASKET_Y*scale,pos[2]),base:v(...pos),phase}}
+ RING_Y.forEach((y,i)=>mesh(new T.TorusGeometry(RING_R[i],i===0?.026:.016,8,48),i===0?k.glow:k.metal,g,0,y,0).rotation.x=Math.PI/2);
+ for(let i=0;i<16;i++){const a=i/16*TAU;const c=mesh(new T.TubeGeometry(new T.CatmullRomCurve3([v(Math.cos(a)*.62,.55,Math.sin(a)*.62),v(Math.cos(a)*.42,-.42,Math.sin(a)*.42),v(Math.cos(a)*RING_R[0],RING_Y[0],Math.sin(a)*RING_R[0])]),12,.006,4),k.rope,g);c.castShadow=false}
+ for(let i=0;i<6;i++){const a=i/6*TAU;mesh(new T.TubeGeometry(new T.LineCurve3(v(Math.cos(a)*.31,RING_Y[0],Math.sin(a)*.31),v(Math.cos(a)*.29,RING_Y[3],Math.sin(a)*.29)),1,.008,4),k.metal,g)}
+ // Twin burner inside the top ring: plated coils, blast valves, live flames.
+ const flames:T.Mesh[]=[];
+ for(const sx of [-.09,.09]){
+  const coil:T.Vector3[]=[];for(let i=0;i<=60;i++){const a=i/60*TAU*5;coil.push(v(sx+Math.cos(a)*.07,RING_Y[0]-.12+i/60*.14,Math.sin(a)*.07))}
+  mesh(new T.TubeGeometry(new T.CatmullRomCurve3(coil),120,.011,6),k.plated,g);
+  mesh(new T.CylinderGeometry(.035,.045,.06,12),k.plated,g,sx,RING_Y[0]-.17,0);
+  const f=mesh(new T.ConeGeometry(.05,.32,12,1,true),k.flame,g,sx,RING_Y[0]+.12,0);f.castShadow=false;flames.push(f)}
+ // Load frame: square burner frame, four suede-covered poles down to the basket corners, flying wires to the bottom ring.
+ const BASKET_Y=-2.62,BH=.36,BW=.25,FRAME_Y=RING_Y[3]-.06;
+ const corners:[number,number][]=[[-1,-1],[1,-1],[1,1],[-1,1]];
+ corners.forEach(([cx,cz],i)=>{const [nx,nz]=corners[(i+1)%4];mesh(new T.TubeGeometry(new T.LineCurve3(v(cx*.2,FRAME_Y,cz*.2),v(nx*.2,FRAME_Y,nz*.2)),1,.012,6),k.plated,g);
+  mesh(new T.TubeGeometry(new T.LineCurve3(v(cx*.2,FRAME_Y,cz*.2),v(cx*(BW-.03),BASKET_Y+BH/2,cz*(BW-.03))),1,.022,8),k.suede,g);
+  mesh(new T.TubeGeometry(new T.LineCurve3(v(cx*.2,FRAME_Y,cz*.2),v(Math.cos(Math.atan2(cz,cx))*RING_R[3],RING_Y[3],Math.sin(Math.atan2(cz,cx))*RING_R[3])),1,.006,4),k.rope,g)});
+ // Woven basket: four slightly bowed wicker walls, rounded corner posts, woven floor, padded leather rim, rope handles.
+ for(let side=0;side<4;side++){const wall=new T.PlaneGeometry(BW*2-.04,BH,8,4);const wp=wall.getAttribute('position');for(let i=0;i<wp.count;i++){const x=wp.getX(i),y=wp.getY(i);wp.setZ(i,.018*(1-(x/(BW))**2)*(1-.3*(y/BH)**2))}wall.computeVertexNormals();
+  const m=mesh(wall,k.wicker,g,0,BASKET_Y,0);m.rotation.y=side*Math.PI/2;m.translateZ(BW);}
+ for(const [cx,cz] of corners)mesh(new T.CylinderGeometry(.022,.022,BH,10),k.wicker,g,cx*(BW-.006),BASKET_Y,cz*(BW-.006));
+ mesh(new T.BoxGeometry(BW*2,.03,BW*2),k.wicker,g,0,BASKET_Y-BH/2,0);
+ const rim:T.Vector3[]=[];for(let i=0;i<=48;i++){const a=i/48*TAU;const c=Math.cos(a),sn=Math.sin(a);const r=BW+.012;rim.push(v(Math.sign(c)*Math.min(Math.abs(c)*1.6,1)*r,BASKET_Y+BH/2+.01,Math.sign(sn)*Math.min(Math.abs(sn)*1.6,1)*r))}
+ mesh(new T.TubeGeometry(new T.CatmullRomCurve3(rim,true),96,.03,10,true),k.leather,g);
+ for(const sd of [-1,1]){const h=mesh(new T.TorusGeometry(.05,.008,6,16,Math.PI),k.rope,g,sd*(BW+.02),BASKET_Y,0);h.rotation.set(0,Math.PI/2,Math.PI)}
+ // Cargo: fuel tanks in leather jackets and burlap money sacks with tied necks, peeking over the rim.
+ for(const [tx,tz] of [[-.13,-.13],[.13,-.13]])mesh(new T.CylinderGeometry(.06,.06,BH*.9,14),k.tank,g,tx,BASKET_Y,tz);
+ const sackGeo=new T.LatheGeometry([new T.Vector2(.001,0),new T.Vector2(.09,.02),new T.Vector2(.11,.1),new T.Vector2(.09,.19),new T.Vector2(.035,.24),new T.Vector2(.03,.27),new T.Vector2(.05,.3),new T.Vector2(.001,.31)],18);
+ for(const [sx2,sz,ry,sc] of [[.1,.1,.3,1],[-.1,.12,2.1,.9],[0,-.02,4.0,.85]] as [number,number,number,number][]){const sk=mesh(sackGeo,k.sack,g,sx2,BASKET_Y-BH/2+.02,sz);sk.rotation.set(.12*sc,ry,-.1);sk.scale.setScalar(sc*1.6);}
+ return{group:g,basket:v(pos[0],pos[1]+BASKET_Y*scale,pos[2]),base:v(...pos),phase,flames}}
 
 export class MoneyCarScene extends Experience{constructor(el:HTMLElement,o:SceneOptions={}){super(el,async(scene,renderer,options):Promise<World>=>{
 const root=new T.Group();const low=options.quality==='low';
@@ -213,20 +252,19 @@ const contact=new T.Mesh(contactGeo,contactMat);contact.renderOrder=1;root.add(c
 // ---------- balloons ----------
 const metal=new T.MeshStandardMaterial({color:'#2b1d1f',metalness:.8,roughness:.4});
 const glow=new T.MeshStandardMaterial({color:'#ff8a3c',emissive:'#ff6a1c',emissiveIntensity:3.2});
-const wicker=new T.MeshStandardMaterial({color:'#6b3a2a',roughness:.95});
-const rope=new T.MeshStandardMaterial({color:'#4a2a26',roughness:.9});
+const rope=new T.MeshStandardMaterial({color:'#4a2a26',roughness:.9});const kit=balloonKit(glow,metal,rope);
 const burgundy=envelopeTexture('#5f1c24','#4a141b'),rust=envelopeTexture('#6e2a22','#56201c','#8a3a26'),striped=envelopeTexture('#4b1a22','#2f3a2c','#20302a');
 // Placed in each shot's screen space (along view, right, up) so the framing matches the reference compositions.
 const balloons:Balloon[]=[
- balloon(root,inShot(SHOT.hero,15,5.0,1.6),2.2,burgundy,.1,metal,glow,wicker,rope),   // hero: big envelope top-right, ring stack down the right edge
- balloon(root,inShot(SHOT.hero,20,-6.2,3.8),1.5,rust,.7,metal,glow,wicker,rope),      // hero: top-left with rings + basket
- balloon(root,inShot(SHOT.hero,34,.5,5.6),1.4,striped,1.3,metal,glow,wicker,rope),    // hero: small, centred above the car
- balloon(root,inShot(SHOT.side,34,-.3,5.4),1.4,striped,1.9,metal,glow,wicker,rope),   // shaded-side shot: small, centred above the car
- balloon(root,inShot(SHOT.side,13,-4.4,2.2),1.9,burgundy,2.5,metal,glow,wicker,rope), // shaded-side shot: left edge, cables + rings
- balloon(root,[-34,15,-24],2.4,burgundy,3.7,metal,glow,wicker,rope),
- balloon(root,[-38,10,20],2.4,rust,4.3,metal,glow,wicker,rope),
- balloon(root,[-26,22,2],2.2,striped,4.9,metal,glow,wicker,rope),
- balloon(root,[-8,4.5,20],1.8,rust,5.5,metal,glow,wicker,rope),
+ balloon(root,inShot(SHOT.hero,15,5.0,1.6),2.2,burgundy,.1,kit),   // hero: big envelope top-right, ring stack down the right edge
+ balloon(root,inShot(SHOT.hero,20,-6.2,3.8),1.5,rust,.7,kit),      // hero: top-left with rings + basket
+ balloon(root,inShot(SHOT.hero,34,.5,5.6),1.4,striped,1.3,kit),    // hero: small, centred above the car
+ balloon(root,inShot(SHOT.side,34,-.3,5.4),1.4,striped,1.9,kit),   // shaded-side shot: small, centred above the car
+ balloon(root,inShot(SHOT.side,13,-4.4,2.2),1.9,burgundy,2.5,kit), // shaded-side shot: left edge, cables + rings
+ balloon(root,[-34,15,-24],2.4,burgundy,3.7,kit),
+ balloon(root,[-38,10,20],2.4,rust,4.3,kit),
+ balloon(root,[-26,22,2],2.2,striped,4.9,kit),
+ balloon(root,[-8,4.5,20],1.8,rust,5.5,kit),
 ];
 
 // ---------- flying cash: swirling cloud + streams spilling from baskets ----------
@@ -259,7 +297,7 @@ return{supportsTransparency:false,root,duration:DURATION,background:'#7a2f52',ta
  car.suspensions.forEach((s,i)=>{const lift=h+p*s.position.z+q*s.position.x;s.position.y=wheelRest[i]+Math.max(0,lift-TRAVEL)});car.articulate();
  const suspension=h,pitch=p,cycle=c;
  root.userData.motion={hop,suspension,pitch,cycle};contactMat.opacity=.7*Math.max(.25,1-hop*5);
- balloons.forEach((b,i)=>{b.group.position.copy(b.base);b.group.position.y+=.35*Math.sin(phase+b.phase*3);b.group.position.x+=.25*Math.sin(phase*2+i);b.group.rotation.z=.02*Math.sin(phase+i)});
+ balloons.forEach((b,i)=>{b.group.position.copy(b.base);b.group.position.y+=.35*Math.sin(phase+b.phase*3);b.group.position.x+=.25*Math.sin(phase*2+i);b.group.rotation.z=.02*Math.sin(phase+i);b.flames.forEach((f,j)=>{const fl=.75+.25*Math.abs(Math.sin(phase*(37+i*3+j*5)+j));f.scale.set(1,fl,1)})});
  let n=0;
  for(const p of swirl){const age=(u*p.fall+p.phase)%1;const a=p.a+phase*(p.r<7?p.turns:1); /* integer turns per loop keeps the cash cloud seamless */dummy.position.set(Math.cos(a)*p.r,16-age*13+.5*Math.sin(age*TAU*3),Math.sin(a)*p.r*.85);dummy.rotation.set(age*TAU*3+p.spin,p.spin+phase*2,Math.sin(age*TAU*2+p.spin));dummy.scale.setScalar(p.s);dummy.updateMatrix();bills.setMatrixAt(n++,dummy.matrix)}
  for(const p of trail){const b=balloons[p.b];const age=(u*3+p.phase)%1;const o=b.group.position;const bx=b.basket.x-b.base.x+o.x,by=b.basket.y-b.base.y+o.y,bz=b.basket.z-b.base.z+o.z;dummy.position.set(bx+p.dx*(.4+age*3)+.4*Math.sin(age*TAU*2+p.spin),by-age*9,bz+p.dz*(.4+age*3));dummy.rotation.set(age*TAU*4+p.spin,p.spin,age*TAU*2);dummy.scale.setScalar(p.s*Math.min(1,age*8));dummy.updateMatrix();bills.setMatrixAt(n++,dummy.matrix)}
