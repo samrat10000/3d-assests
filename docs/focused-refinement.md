@@ -85,3 +85,9 @@ The car in `src/assets/classic.ts` is rebuilt to the user's lowrider references,
   - A square load frame on four suede-covered poles.
   - The basket is hand-woven wicker with slightly bowed walls, corner posts, a woven floor, a padded leather rim and rope handles.
   - The cargo is fuel tanks plus burlap money sacks with "$" printed on them, peeking over the rim. There are no passengers.
+
+## Dream Currency, pass 8: sacks, cash stream, burner blasts
+
+- **Money sacks:** burlap texture made in code (irregular threads, slub, a stitched seam, a worn stencilled "$"). Each sack is lumpy and slumped, pinched at the neck under a loose drawstring, with an open folded lip and notes poking out. There are three per basket, all inside the walls and clear of the poles.
+- **Cash from the sacks:** each note pops up out of a sack mouth, flips, catches the wind and flutters down and away. That's 34 notes per balloon across the six balloons near the car, and the cash swirl stays.
+- **Burner blasts:** each burner has three nested jets (blue-white core, orange body, red fringe) drawn by a shader with streaks, a waving body and a frayed tip. Each of the 18 burners fires on its own seeded random schedule: bursts of 0.2–1.8 s, gaps of 0.3–5 s, occasional rapid blips, ramping in quickly and cutting off. The glowing ring flares with each blast. The flames are runtime-only and aren't in the GLB.

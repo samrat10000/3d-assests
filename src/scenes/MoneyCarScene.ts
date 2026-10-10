@@ -125,21 +125,47 @@ function rollEnd(side:1|-1,material:T.Material,parent:T.Object3D){const g=new T.
 /** Flattened rubber band slightly off-square to the roll, as in the reference. */
 function band(z:number,tilt:number,material:T.Material,parent:T.Object3D){const t=mesh(new T.TorusGeometry(R+.04,.04,10,220),material,parent,0,0,z);t.scale.z=3.3;t.rotation.y=tilt;t.rotation.x=tilt*.6;return t}
 
-interface Balloon{group:T.Group;basket:T.Vector3;base:T.Vector3;phase:number;flames:T.Mesh[]}
+/** Burner jet: open cone (base at y=0, tip at y=1) drawn additively. `power` 0..1 drives length, width and heat;
+ *  turbulence scrolls up the jet and frays the tip. All motion uses `u` (loop fraction) with integer rates, so it loops cleanly. */
+const FlameShader={uniforms:{u:{value:0},power:{value:0},seed:{value:0},core:{value:new T.Color(1,1,1)},hot:{value:new T.Color(1,.6,.2)},tip:{value:new T.Color(.9,.15,.05)},gain:{value:1}},
+vertexShader:`uniform float u,power,seed;varying float vy;varying vec3 vN,vV;
+void main(){vec3 p=position;float y=p.y;float len=power*(.75+.25*sin(u*6.2831*173.+seed*7.));
+ p.xz*=mix(.55,1.,power)*(1.+.25*sin(y*14.-u*6.2831*240.+seed));p.y*=len;
+ p.x+=.06*y*y*len*sin(u*6.2831*131.+seed*3.);p.z+=.06*y*y*len*cos(u*6.2831*157.+seed*5.);
+ vy=y;vec4 mv=modelViewMatrix*vec4(p,1.);vV=normalize(-mv.xyz);vN=normalize(normalMatrix*normal);gl_Position=projectionMatrix*mv;}`,
+fragmentShader:`uniform float u,power,seed,gain;uniform vec3 core,hot,tip;varying float vy;varying vec3 vN,vV;
+float h(float x){return fract(sin(x)*43758.5453);}
+void main(){if(power<.01)discard;float rim=pow(abs(dot(normalize(vN),normalize(vV))),1.5);
+ float streak=.6+.4*sin(vy*22.-u*6.2831*380.+seed*11.)*sin(vy*9.-u*6.2831*210.+seed);
+ vec3 c=mix(core,hot,smoothstep(0.,.35,vy));c=mix(c,tip,smoothstep(.45,1.,vy));
+ float a=clamp(rim*pow(1.-vy,1.2)*streak*power*gain,0.,1.);gl_FragColor=vec4(c*3.2,a);}`};
+/** Seeded, irregular on/off firing schedule for one burner over the loop: bursts of 0.2–1.8 s, gaps of 0.3–5 s, occasional rapid blips. */
+function burnSchedule(seed:number,duration:number){const rng=random(seed*7919+13);const ev:[number,number][]=[];let t=rng()*4;
+ while(t<duration){const blip=rng()<.25;const n=blip?2+Math.floor(rng()*3):1;for(let i=0;i<n&&t<duration;i++){const d=blip?.12+rng()*.18:.35+rng()*1.5;ev.push([t,t+d]);t+=d+(blip?.12+rng()*.2:0)}t+=.3+rng()*4.7}
+ return(time:number)=>{let p=0;for(const [a,b] of ev)for(const o of [0,-duration,duration]){const x=time+o;if(x>a-.001&&x<b+.15){const up=Math.min(1,(x-a)/.06),down=x>b?1-(x-b)/.15:1;p=Math.max(p,Math.max(0,Math.min(up,down)))}}return p}}
+interface Burner{mats:T.ShaderMaterial[];glow:T.Mesh;fire:(t:number)=>number}
+interface Balloon{group:T.Group;basket:T.Vector3;base:T.Vector3;phase:number;burners:Burner[];ring:T.MeshStandardMaterial;mouths:T.Vector3[]}
 /** Shared look for every balloon: hand-woven wicker, padded leather, suede pole covers, plated burner, burlap money sacks. */
-function balloonKit(glow:T.Material,metal:T.Material,rope:T.Material){
+function balloonKit(glow:T.Material,metal:T.Material,rope:T.Material,note:HTMLCanvasElement){
  const weave=canvasTexture(256,256,g=>{g.fillStyle='#3a1f14';g.fillRect(0,0,256,256);const rng=random(5);
   for(let row=0;row<16;row++)for(let col=0;col<16;col++){const over=(row+col)%2===0;const x=col*16,y=row*16;const grd=over?g.createLinearGradient(x,y,x,y+16):g.createLinearGradient(x,y,x+16,y);const base=150+rng()*40;grd.addColorStop(0,`rgb(${base*.55},${base*.33},${base*.18})`);grd.addColorStop(.5,`rgb(${base},${base*.68},${base*.38})`);grd.addColorStop(1,`rgb(${base*.5},${base*.3},${base*.16})`);g.fillStyle=grd;over?g.fillRect(x+1,y+2,14,12):g.fillRect(x+2,y+1,12,14)}});
  weave.wrapS=weave.wrapT=T.RepeatWrapping;weave.repeat.set(3,2);
- const sackTex=canvasTexture(256,256,g=>{g.fillStyle='#b48c5a';g.fillRect(0,0,256,256);g.strokeStyle='rgba(70,45,25,.35)';for(let i=0;i<256;i+=4){g.beginPath();g.moveTo(i,0);g.lineTo(i,256);g.stroke();g.beginPath();g.moveTo(0,i);g.lineTo(256,i);g.stroke()}g.fillStyle='#2d5a3a';g.font='bold 120px Georgia';g.textAlign='center';g.textBaseline='middle';g.fillText('$',128,140)});
+ // Coarse burlap: irregular warp/weft threads, slub noise, a stitched side seam and a worn stencilled "$".
+ const sackTex=canvasTexture(512,512,g=>{const rng=random(21);g.fillStyle='#a78152';g.fillRect(0,0,512,512);
+  for(let i=0;i<512;i+=5){const w=2+rng()*2;g.fillStyle=`rgba(${60+rng()*40},${40+rng()*25},${20+rng()*15},${.35+rng()*.25})`;g.fillRect(i,0,w*.4,512);g.fillStyle=`rgba(${200+rng()*40},${165+rng()*30},${110+rng()*30},${.25+rng()*.2})`;g.fillRect(0,i+rng(),512,w*.5)}
+  for(let i=0;i<1800;i++){g.fillStyle=`rgba(${rng()<.5?'70,45,25':'225,195,140'},${.1+rng()*.25})`;g.fillRect(rng()*512,rng()*512,1+rng()*6,1)}
+  g.strokeStyle='rgba(60,38,20,.8)';g.lineWidth=3;g.setLineDash([10,7]);g.beginPath();g.moveTo(8,0);g.lineTo(8,512);g.stroke();g.setLineDash([]);
+  g.save();g.globalAlpha=.78;g.fillStyle='#24432c';g.font='bold 210px Georgia';g.textAlign='center';g.textBaseline='middle';g.fillText('$',256,300);g.globalAlpha=.35;g.fillStyle='#a78152';for(let i=0;i<260;i++)g.fillRect(150+rng()*210,180+rng()*240,2+rng()*8,1+rng()*3);g.restore();
+  const fold=g.createLinearGradient(0,0,0,512);fold.addColorStop(0,'rgba(40,25,10,.45)');fold.addColorStop(.25,'rgba(40,25,10,0)');fold.addColorStop(.85,'rgba(40,25,10,0)');fold.addColorStop(1,'rgba(40,25,10,.35)');g.fillStyle=fold;g.fillRect(0,0,512,512)});
  return{glow,metal,rope,
   wicker:new T.MeshStandardMaterial({map:weave,bumpMap:weave,bumpScale:2,roughness:.92,side:T.DoubleSide}),
   leather:new T.MeshStandardMaterial({color:'#3b2016',roughness:.55}),
   suede:new T.MeshStandardMaterial({color:'#24161a',roughness:.95}),
   plated:new T.MeshStandardMaterial({color:'#d8cdc6',metalness:1,roughness:.18}),
   tank:new T.MeshStandardMaterial({color:'#5c1f22',roughness:.6}),
-  sack:new T.MeshStandardMaterial({map:sackTex,roughness:.95}),
-  flame:new T.MeshBasicMaterial({color:new T.Color(4,1.9,.6),transparent:true,opacity:.85,blending:T.AdditiveBlending,depthWrite:false}),
+  sack:new T.MeshStandardMaterial({map:sackTex,bumpMap:sackTex,bumpScale:3,roughness:.97,side:T.DoubleSide}),
+  sackInside:new T.MeshStandardMaterial({color:'#3a2616',roughness:1,side:T.BackSide}),
+  note:(()=>{const t=new T.CanvasTexture(note);t.colorSpace=T.SRGBColorSpace;return new T.MeshStandardMaterial({map:t,roughness:.8,side:T.DoubleSide})})(),
   skirt:new T.MeshStandardMaterial({color:'#2a0f12',roughness:.85,side:T.DoubleSide})}}
 type Kit=ReturnType<typeof balloonKit>;
 /** Hot-air balloon: gored envelope with scalloped panels and a flared skirt, flying wires down to the stacked hoop rings
@@ -153,16 +179,22 @@ function balloon(parent:T.Object3D,pos:[number,number,number],scale:number,tex:T
  // Flared fabric skirt below the throat.
  mesh(new T.LatheGeometry([new T.Vector2(.24,0),new T.Vector2(.26,-.12),new T.Vector2(.31,-.3),new T.Vector2(.36,-.42)],48),k.skirt,g);
  const RING_Y=[-1.45,-1.66,-1.87,-2.08],RING_R=[.33,.31,.31,.29];
- RING_Y.forEach((y,i)=>mesh(new T.TorusGeometry(RING_R[i],i===0?.026:.016,8,48),i===0?k.glow:k.metal,g,0,y,0).rotation.x=Math.PI/2);
+ const ring=(k.glow as T.MeshStandardMaterial).clone();RING_Y.forEach((y,i)=>mesh(new T.TorusGeometry(RING_R[i],i===0?.026:.016,8,48),i===0?ring:k.metal,g,0,y,0).rotation.x=Math.PI/2);
  for(let i=0;i<16;i++){const a=i/16*TAU;const c=mesh(new T.TubeGeometry(new T.CatmullRomCurve3([v(Math.cos(a)*.62,.55,Math.sin(a)*.62),v(Math.cos(a)*.42,-.42,Math.sin(a)*.42),v(Math.cos(a)*RING_R[0],RING_Y[0],Math.sin(a)*RING_R[0])]),12,.006,4),k.rope,g);c.castShadow=false}
  for(let i=0;i<6;i++){const a=i/6*TAU;mesh(new T.TubeGeometry(new T.LineCurve3(v(Math.cos(a)*.31,RING_Y[0],Math.sin(a)*.31),v(Math.cos(a)*.29,RING_Y[3],Math.sin(a)*.29)),1,.008,4),k.metal,g)}
- // Twin burner inside the top ring: plated coils, blast valves, live flames.
- const flames:T.Mesh[]=[];
- for(const sx of [-.09,.09]){
+ // Twin burner inside the top ring: plated coils, blast valves and three nested jets per burner (white core, orange body, red fringe).
+ const burners:Burner[]=[];
+ for(const [bi,sx] of [[0,-.09],[1,.09]] as [number,number][]){
   const coil:T.Vector3[]=[];for(let i=0;i<=60;i++){const a=i/60*TAU*5;coil.push(v(sx+Math.cos(a)*.07,RING_Y[0]-.12+i/60*.14,Math.sin(a)*.07))}
   mesh(new T.TubeGeometry(new T.CatmullRomCurve3(coil),120,.011,6),k.plated,g);
   mesh(new T.CylinderGeometry(.035,.045,.06,12),k.plated,g,sx,RING_Y[0]-.17,0);
-  const f=mesh(new T.ConeGeometry(.05,.32,12,1,true),k.flame,g,sx,RING_Y[0]+.12,0);f.castShadow=false;flames.push(f)}
+  const mats:T.ShaderMaterial[]=[];const seed=Math.floor(phase*1000)+bi*97;
+  for(const [r,len,gain,core,hot,tip,add] of [[.12,1.35,1.1,'#ffb25a','#ff4a08','#b0140a',0],[.07,1.15,1.3,'#ffe6b0','#ff7a18','#e0300c',0],[.032,.85,1.6,'#d8e4ff','#fff0c0','#ffa040',1]] as [number,number,number,string,string,string,number][]){
+   const m=new T.ShaderMaterial({...FlameShader,uniforms:T.UniformsUtils.clone(FlameShader.uniforms),transparent:true,depthWrite:false,blending:add?T.AdditiveBlending:T.NormalBlending,side:T.DoubleSide}); // body reads as fire even against the bright sky; the core adds heat
+   m.uniforms.seed.value=seed+r*100;m.uniforms.gain.value=gain;m.uniforms.core.value.set(core);m.uniforms.hot.value.set(hot);m.uniforms.tip.value.set(tip);mats.push(m);
+   const jet=mesh(new T.CylinderGeometry(r*.25,r,1,20,12,true).translate(0,.5,0),m,g,sx,RING_Y[0]-.1,0);jet.scale.set(1,len,1);jet.castShadow=jet.receiveShadow=false;jet.frustumCulled=false}
+  const glowSprite=mesh(new T.SphereGeometry(.09,12,8),new T.MeshBasicMaterial({color:new T.Color(3,1.4,.4),transparent:true,opacity:0,blending:T.AdditiveBlending,depthWrite:false}),g,sx,RING_Y[0]-.06,0);glowSprite.castShadow=false;
+  burners.push({mats,glow:glowSprite,fire:burnSchedule(seed+1,24)})}
  // Load frame: square burner frame, four suede-covered poles down to the basket corners, flying wires to the bottom ring.
  const BASKET_Y=-2.62,BH=.36,BW=.25,FRAME_Y=RING_Y[3]-.06;
  const corners:[number,number][]=[[-1,-1],[1,-1],[1,1],[-1,1]];
@@ -178,10 +210,28 @@ function balloon(parent:T.Object3D,pos:[number,number,number],scale:number,tex:T
  mesh(new T.TubeGeometry(new T.CatmullRomCurve3(rim,true),96,.03,10,true),k.leather,g);
  for(const sd of [-1,1]){const h=mesh(new T.TorusGeometry(.05,.008,6,16,Math.PI),k.rope,g,sd*(BW+.02),BASKET_Y,0);h.rotation.set(0,Math.PI/2,Math.PI)}
  // Cargo: fuel tanks in leather jackets and burlap money sacks with tied necks, peeking over the rim.
- for(const [tx,tz] of [[-.13,-.13],[.13,-.13]])mesh(new T.CylinderGeometry(.06,.06,BH*.9,14),k.tank,g,tx,BASKET_Y,tz);
- const sackGeo=new T.LatheGeometry([new T.Vector2(.001,0),new T.Vector2(.09,.02),new T.Vector2(.11,.1),new T.Vector2(.09,.19),new T.Vector2(.035,.24),new T.Vector2(.03,.27),new T.Vector2(.05,.3),new T.Vector2(.001,.31)],18);
- for(const [sx2,sz,ry,sc] of [[.1,.1,.3,1],[-.1,.12,2.1,.9],[0,-.02,4.0,.85]] as [number,number,number,number][]){const sk=mesh(sackGeo,k.sack,g,sx2,BASKET_Y-BH/2+.02,sz);sk.rotation.set(.12*sc,ry,-.1);sk.scale.setScalar(sc*1.6);}
- return{group:g,basket:v(pos[0],pos[1]+BASKET_Y*scale,pos[2]),base:v(...pos),phase,flames}}
+ mesh(new T.CylinderGeometry(.055,.055,BH*.85,14),k.tank,g,-.14,BASKET_Y-.02,-.14);
+ // Burlap money sacks: slumped and lumpy, pinched at the neck under a loose drawstring, mouth folded open with notes
+ // poking out. Sized to sit inside the walls and clear the corner poles.
+ const mouths:T.Vector3[]=[];
+ const sack=(x:number,z:number,h:number,r:number,lean:number,yaw:number,seed:number)=>{
+  const prof:T.Vector2[]=[[0,0],[.75,.0],[.95,.06],[1,.2],[.98,.45],[.9,.66],[.66,.8],[.48,.86],[.5,.9],[.7,.97],[.82,1]].map(([rr,yy])=>new T.Vector2(Math.max(.001,rr*r),yy*h));
+  const geo=new T.LatheGeometry(prof,48);const gp=geo.getAttribute('position');
+  for(let i=0;i<gp.count;i++){const px=gp.getX(i),py=gp.getY(i),pz=gp.getZ(i),a=Math.atan2(pz,px),f=py/h;
+   let k=1+.07*Math.sin(5*a+seed+f*9)*f+.05*Math.sin(3*a+seed*2)+.03*Math.sin(11*a+f*20+seed);   // lumps from the cash inside
+   k*=1-.18*Math.max(0,Math.sin(9*a+seed))*T.MathUtils.smoothstep(f,.7,.86)*(1-T.MathUtils.smoothstep(f,.88,.95)); // gathered folds at the neck
+   if(f>.88)k*=1+.12*Math.sin(7*a+seed);                                                                           // floppy folded lip
+   const sag=f<.08?.7+f*3.75:1;gp.setXYZ(i,px*k+lean*f*f*h,py*sag,pz*k)}
+  geo.computeVertexNormals();
+  const o=new T.Group();o.position.set(x,BASKET_Y-BH/2+.015,z);o.rotation.y=yaw;g.add(o);
+  mesh(geo,k.sack,o);const inner=mesh(geo,k.sackInside,o);inner.scale.setScalar(.97);
+  const tie=mesh(new T.TorusGeometry(r*.5,.006,6,28),k.rope,o,lean*.74*.74*h,.85*h,0);tie.rotation.x=Math.PI/2;tie.scale.set(1,1.1,1);
+  mesh(new T.TubeGeometry(new T.CatmullRomCurve3([v(r*.5+lean*.55*h,.85*h,0),v(r*.75,.78*h,.02),v(r*.95,.62*h,-.01)]),12,.005,4),k.rope,o);
+  for(let j=0;j<4;j++){const n=mesh(new T.PlaneGeometry(.11,.048),k.note,o,lean*h+(j-1.5)*.012,h*(.96+.05*(j%2)),(j%3-1)*.01);n.rotation.set(-.4+j*.35,seed+j*1.3,.5-j*.3);n.castShadow=false}
+  o.updateMatrix();mouths.push(v(lean*h,h*1.02,0).applyMatrix4(o.matrix));
+ };
+ sack(.075,.085,.31,.085,.03,.4,1.3);sack(-.09,.065,.27,.08,-.02,2.2,4.1);sack(.02,-.07,.24,.075,.025,4.6,7.7);
+ return{group:g,basket:v(pos[0],pos[1]+BASKET_Y*scale,pos[2]),base:v(...pos),phase,burners,ring,mouths}}
 
 export class MoneyCarScene extends Experience{constructor(el:HTMLElement,o:SceneOptions={}){super(el,async(scene,renderer,options):Promise<World>=>{
 const root=new T.Group();const low=options.quality==='low';
@@ -252,7 +302,7 @@ const contact=new T.Mesh(contactGeo,contactMat);contact.renderOrder=1;root.add(c
 // ---------- balloons ----------
 const metal=new T.MeshStandardMaterial({color:'#2b1d1f',metalness:.8,roughness:.4});
 const glow=new T.MeshStandardMaterial({color:'#ff8a3c',emissive:'#ff6a1c',emissiveIntensity:3.2});
-const rope=new T.MeshStandardMaterial({color:'#4a2a26',roughness:.9});const kit=balloonKit(glow,metal,rope);
+const rope=new T.MeshStandardMaterial({color:'#4a2a26',roughness:.9});const kit=balloonKit(glow,metal,rope,noteCanvas);
 const burgundy=envelopeTexture('#5f1c24','#4a141b'),rust=envelopeTexture('#6e2a22','#56201c','#8a3a26'),striped=envelopeTexture('#4b1a22','#2f3a2c','#20302a');
 // Placed in each shot's screen space (along view, right, up) so the framing matches the reference compositions.
 const balloons:Balloon[]=[
@@ -272,11 +322,11 @@ const billTex=new T.CanvasTexture(noteCanvas);billTex.colorSpace=T.SRGBColorSpac
 const billMat=new T.MeshStandardMaterial({map:billTex,roughness:.8,side:T.DoubleSide,color:'#b7a4a6'});
 billMat.onBeforeCompile=sh=>{sh.vertexShader=sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed.z += 0.05*sin(position.x*9.0+instanceMatrix[3].x*3.0)+0.03*sin(position.y*14.0+instanceMatrix[3].y);')};
 const billGeo=new T.PlaneGeometry(.44,.19,8,2);
-const SWIRL=low?80:220,TRAIL_PER=low?10:26,TRAIL_SRC=[0,1,2,3];
+const SWIRL=low?80:200,TRAIL_PER=low?12:34,TRAIL_SRC=[0,1,2,3,4,5];
 const bills=new T.InstancedMesh(billGeo,billMat,SWIRL+TRAIL_PER*TRAIL_SRC.length);bills.castShadow=false;bills.frustumCulled=false;root.add(bills);
 const rng=random(34);
 const swirl=Array.from({length:SWIRL},()=>({r:2.5+rng()*13,a:rng()*TAU,y:rng(),turns:rng()<.5?1:2,fall:1+Math.floor(rng()*2),phase:rng(),spin:rng()*TAU,s:.7+rng()*.7}));
-const trail=TRAIL_SRC.flatMap(b=>Array.from({length:TRAIL_PER},()=>({b,phase:rng(),dx:(rng()-.5),dz:(rng()-.5),spin:rng()*TAU,s:.6+rng()*.5})));
+const trail=TRAIL_SRC.flatMap(b=>Array.from({length:TRAIL_PER},(_,j)=>{const a=rng()*TAU;return{b,m:j%3,phase:rng(),dx:Math.cos(a),dz:Math.sin(a),pop:.6+rng()*.6,spin:rng()*TAU,s:.42+rng()*.22}}));const mouthW=new T.Vector3();
 const dummy=new T.Object3D();
 
 // Filmic grade (composer path only; low quality renders without it).
@@ -297,10 +347,16 @@ return{supportsTransparency:false,root,duration:DURATION,background:'#7a2f52',ta
  car.suspensions.forEach((s,i)=>{const lift=h+p*s.position.z+q*s.position.x;s.position.y=wheelRest[i]+Math.max(0,lift-TRAVEL)});car.articulate();
  const suspension=h,pitch=p,cycle=c;
  root.userData.motion={hop,suspension,pitch,cycle};contactMat.opacity=.7*Math.max(.25,1-hop*5);
- balloons.forEach((b,i)=>{b.group.position.copy(b.base);b.group.position.y+=.35*Math.sin(phase+b.phase*3);b.group.position.x+=.25*Math.sin(phase*2+i);b.group.rotation.z=.02*Math.sin(phase+i);b.flames.forEach((f,j)=>{const fl=.75+.25*Math.abs(Math.sin(phase*(37+i*3+j*5)+j));f.scale.set(1,fl,1)})});
+ balloons.forEach((b,i)=>{b.group.position.copy(b.base);b.group.position.y+=.35*Math.sin(phase+b.phase*3);b.group.position.x+=.25*Math.sin(phase*2+i);b.group.rotation.z=.02*Math.sin(phase+i);let hot=0;b.burners.forEach(br=>{const pw=br.fire(t);hot=Math.max(hot,pw);br.mats.forEach(m=>{m.uniforms.u.value=u;m.uniforms.power.value=pw});(br.glow.material as T.MeshBasicMaterial).opacity=.8*pw});b.ring.emissiveIntensity=.5+3.5*hot});
  let n=0;
  for(const p of swirl){const age=(u*p.fall+p.phase)%1;const a=p.a+phase*(p.r<7?p.turns:1); /* integer turns per loop keeps the cash cloud seamless */dummy.position.set(Math.cos(a)*p.r,16-age*13+.5*Math.sin(age*TAU*3),Math.sin(a)*p.r*.85);dummy.rotation.set(age*TAU*3+p.spin,p.spin+phase*2,Math.sin(age*TAU*2+p.spin));dummy.scale.setScalar(p.s);dummy.updateMatrix();bills.setMatrixAt(n++,dummy.matrix)}
- for(const p of trail){const b=balloons[p.b];const age=(u*3+p.phase)%1;const o=b.group.position;const bx=b.basket.x-b.base.x+o.x,by=b.basket.y-b.base.y+o.y,bz=b.basket.z-b.base.z+o.z;dummy.position.set(bx+p.dx*(.4+age*3)+.4*Math.sin(age*TAU*2+p.spin),by-age*9,bz+p.dz*(.4+age*3));dummy.rotation.set(age*TAU*4+p.spin,p.spin,age*TAU*2);dummy.scale.setScalar(p.s*Math.min(1,age*8));dummy.updateMatrix();bills.setMatrixAt(n++,dummy.matrix)}
+ // Notes leave the sack mouths: pop up out of the bag, flip over, catch the wind and flutter down and away (3 bursts per loop per note).
+ balloons.forEach(b=>b.group.updateMatrixWorld());
+ for(const p of trail){const b=balloons[p.b];const age=(u*3+p.phase)%1;b.group.localToWorld(mouthW.copy(b.mouths[p.m]));const sc=b.group.scale.x;
+  const popT=Math.min(1,age/.09),pop=Math.sin(popT*Math.PI/2)*p.pop*.35*sc,after=Math.max(0,age-.09);
+  const out=after*3.2+.12*popT,fall=after*after*7+after*1.5;
+  dummy.position.set(mouthW.x+p.dx*out+.35*Math.sin(age*TAU*2+p.spin)*after*2,mouthW.y+pop-fall,mouthW.z+p.dz*out+.25*Math.cos(age*TAU*3+p.spin)*after*2);
+  dummy.rotation.set(p.spin+age*TAU*4,p.spin*.7+age*TAU*2,Math.sin(age*TAU*3+p.spin)*1.2);dummy.scale.setScalar(p.s*(.25+.75*popT)*(age>.97?(1-age)/.03:1));dummy.updateMatrix();bills.setMatrixAt(n++,dummy.matrix)}
  bills.instanceMatrix.needsUpdate=true;
 },camera(t,c){
  // Shot order from the reference: low front-3/4 hero into the sun, whip to head-on, front-3/4 from the shaded side,
