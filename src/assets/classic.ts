@@ -18,6 +18,8 @@ export const CAR_LENGTH = 5.4;
 export function createClassicCar(): {
   root: THREE.Group; chassis: THREE.Group; wheels: THREE.Object3D[]; suspensions: THREE.Group[];
   update: (spin: number, bounce: number, steer?: number) => void;
+  /** Re-aim every suspension link after posing the chassis and suspension groups. */
+  articulate: () => void;
 } {
   const root = new THREE.Group(); root.name = 'Lime pearl lowrider hardtop';
   const chassis = new THREE.Group(); chassis.name = 'Body on hydraulics'; root.add(chassis);
@@ -28,7 +30,7 @@ export function createClassicCar(): {
   const satin = new THREE.MeshStandardMaterial({ color: '#b9b0b5', metalness: 1, roughness: .3, side: THREE.DoubleSide });
   const dark = new THREE.MeshStandardMaterial({ color: '#121012', roughness: .7, metalness: .2, side: THREE.DoubleSide });
   const cell = new THREE.MeshStandardMaterial({ color: '#1e0d18', metalness: .6, roughness: .35, side: THREE.DoubleSide });
-  const under = new THREE.MeshStandardMaterial({ color: '#191618', roughness: .85, side: THREE.DoubleSide });
+  const under = new THREE.MeshStandardMaterial({ color: '#4a3324', metalness: .7, roughness: .35, side: THREE.DoubleSide });
   const rubber = new THREE.MeshStandardMaterial({ color: '#121012', roughness: .85, side: THREE.DoubleSide });
   const white = new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#3a3436', roughness: .5, side: THREE.DoubleSide });
   const glass = new THREE.MeshPhysicalMaterial({ color: '#5e3f86', metalness: .45, roughness: .04, transparent: true, opacity: .8, side: THREE.DoubleSide, depthWrite: false, clearcoat: 1 });
@@ -106,7 +108,7 @@ export function createClassicCar(): {
     surface((u, v) => { const a = u * Math.PI; return [s * (1 - v * .45), ARCH_Y + Math.sin(a) * (ARCH_R - .01), wz + Math.cos(a) * (ARCH_R - .01)]; }, 32, 2, under);
     const lip: [number, number, number][] = []; for (let i = 0; i <= 32; i++) { const a = i / 32 * Math.PI; const z = wz + Math.cos(a) * ARCH_R, y = ARCH_Y + Math.sin(a) * ARCH_R; lip.push([s * (xAtY(y, z) + .003), y, z]); } tube(lip, .01);
   }
-  const floor = rbox(1.7, .04, 4.7, .015, under); floor.position.set(0, .3, -.05);
+  const floor = rbox(1.7, .03, 4.7, .012, under); floor.position.set(0, .315, -.05);
 
   // ---------- side brightwork ----------
   for (const s of [-1, 1]) {
@@ -171,7 +173,6 @@ export function createClassicCar(): {
     const ring = add(new THREE.TorusGeometry(.064, .01, 10, 36), chrome); ring.position.copy(at);
   }
   const plateR = rbox(.3, .15, .012, .008, white); plateR.position.copy(R(0, .5, .2));
-  for (const s of [-1, 1]) rod(new THREE.Vector3(s * .5, .3, ZR + .3), new THREE.Vector3(s * .5, .3, ZR - .05), .035, chrome, chassis, 14);
 
   // ---------- greenhouse: hardtop, wraparound windshield, thin A-pillars, broad C-pillars ----------
   const BASE_Y = .925, ROOF_Y = 1.34, BASE_HW = .88, ROOF_HW = .72, ROOF_F = .45, ROOF_R = -.85, WS_BASE = 1.2, RW_BASE = -1.55;
@@ -198,13 +199,43 @@ export function createClassicCar(): {
   const head = add(new THREE.SphereGeometry(.12, 20, 14), skin); head.scale.set(.9, 1.1, 1); head.position.set(-.42, 1.24, .14);
   const hair = add(new THREE.SphereGeometry(.125, 20, 12, 0, Math.PI * 2, 0, Math.PI * .5), jacket); hair.position.set(-.42, 1.26, .12);
 
-  // ---------- exposed chrome hydraulics on the body ----------
+  // ---------- underside: plated X-frame, ribbed floor, drivetrain, exhaust, tank, hydraulic plumbing ----------
+  // Middle of the car stays above y≈.27 (the roll bulges up between the axles); ends can hang lower.
+  const gold = new THREE.MeshStandardMaterial({ color: '#e3b45c', metalness: 1, roughness: .16 });
+  const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+  // Floor pan ribs + transmission tunnel.
+  for (let i = 0; i < 13; i++) { const r = rbox(1.5, .018, .045, .008, gold); r.position.set(0, .292, -2.0 + i * .3); }
+  const tunnel = add(new THREE.CylinderGeometry(.17, .17, 2.4, 24, 1, true, Math.PI / 2, Math.PI), under); tunnel.rotation.x = Math.PI / 2; tunnel.position.set(0, .3, .25);
+  // X-frame: perimeter rails pinch to a narrow waist under the cabin, kick up over the rear axle.
   for (const s of [-1, 1]) {
-    rod(new THREE.Vector3(s * .45, .28, 2.3), new THREE.Vector3(s * .45, .28, -2.2), .025, chrome, chassis, 10); // frame rails
-    for (const wz of [WHEEL_Z.front, WHEEL_Z.rear]) { rod(new THREE.Vector3(s * .52, .3, wz), new THREE.Vector3(s * .52, .62, wz), .045, chrome, chassis, 16); rod(new THREE.Vector3(s * .52, .3, wz), new THREE.Vector3(s * .52, .5, wz), .052, satin, chassis, 16); }
+    tube([[s * .42, .3, 2.45], [s * .44, .29, 1.9], [s * .36, .285, 1.1], [s * .11, .29, .1], [s * .32, .29, -.95], [s * .44, .36, -1.25], [s * .45, .46, -1.6], [s * .44, .4, -2.05], [s * .44, .38, -2.6]], .034, gold);
+    tube([[s * .36, .285, 1.1], [s * .72, .3, .6], [s * .74, .3, -.6], [s * .32, .29, -.95]], .018, gold); // outriggers to the rocker
   }
-  rod(new THREE.Vector3(0, .26, 1.1), new THREE.Vector3(0, .26, WHEEL_Z.rear), .04, chrome, chassis, 12);
-  const pump = add(new THREE.CylinderGeometry(.09, .09, .4, 18), chrome); pump.rotation.z = Math.PI / 2; pump.position.set(0, .45, -2.15);
+  for (const z of [2.3, WHEEL_Z.front - .02, .1, -2.05]) rod(P(-.45, .3, z), P(.45, .3, z), z === .1 ? .022 : .03, gold, chassis, 12); // crossmembers
+  const kframe = rbox(.95, .07, .16, .02, chrome); kframe.position.set(0, .27, WHEEL_Z.front + .05);
+  // Engine sump, bellhousing, transmission, mounts.
+  const sump = rbox(.42, .12, .62, .03, satin); sump.position.set(0, .33, 1.9);
+  for (let i = 0; i < 6; i++) { const fin = rbox(.4, .01, .02, .004, chrome); fin.position.set(0, .268, 1.65 + i * .1); }
+  const bell = add(new THREE.CylinderGeometry(.16, .22, .3, 24), satin); bell.rotation.x = Math.PI / 2; bell.position.set(0, .36, 1.35);
+  const trans = add(new THREE.CylinderGeometry(.1, .15, .9, 20), satin); trans.rotation.x = Math.PI / 2; trans.position.set(0, .34, .78);
+  const transPan = rbox(.24, .05, .4, .015, chrome); transPan.position.set(0, .275, .8);
+  // Dual exhaust with chrome mufflers and tips.
+  for (const s of [-1, 1]) {
+    tube([[s * .26, .36, 2.0], [s * .28, .3, 1.5], [s * .2, .28, .9], [s * .19, .285, .2], [s * .24, .29, -.35]], .028, chrome);
+    const muffler = add(new THREE.CylinderGeometry(.075, .075, .55, 20), chrome); muffler.rotation.x = Math.PI / 2; muffler.position.set(s * .27, .31, -.65);
+    tube([[s * .27, .31, -.95], [s * .3, .33, -1.2], [s * .36, .42, -1.55], [s * .44, .38, -2.0], [s * .5, .31, -2.5], [s * .5, .3, ZR - .03]], .03, chrome);
+  }
+  // Fuel tank behind the axle, plated straps.
+  const tank = rbox(1.1, .2, .5, .05, satin); tank.position.set(0, .42, -2.25);
+  for (const z of [-2.1, -2.4]) { const strap = rbox(1.14, .012, .04, .005, gold); strap.position.set(0, .315, z); }
+  // Hydraulic plumbing: trunk pump block feeding chrome hard lines to each corner.
+  const block = rbox(.4, .12, .18, .03, chrome); block.position.set(0, .4, -1.95);
+  for (const sx of [-1, 1]) for (const wz of [WHEEL_Z.front, WHEEL_Z.rear]) {
+    const end: [number, number, number] = [sx * .56, .64, wz + .12];
+    tube(wz > 0 ? [[sx * .12, .4, -1.95], [sx * .2, .33, -1.2], [sx * .62, .31, -.2], [sx * .64, .32, .9], [sx * .6, .5, wz - .2], end] : [[sx * .12, .4, -1.95], [sx * .35, .45, -1.85], [sx * .58, .58, -1.7], end], .009, chrome);
+  }
+  // Front anti-roll bar.
+  tube([[-.38, .27, WHEEL_Z.front + .32], [-.3, .25, WHEEL_Z.front + .42], [.3, .25, WHEEL_Z.front + .42], [.38, .27, WHEEL_Z.front + .32]], .016, chrome);
 
   // ---------- wheels: chrome wire wheels with thin whitewalls, hung from chrome A-arms / trailing links ----------
   const W = .095, RO = WHEEL_RADIUS, RB = .205;
@@ -235,23 +266,78 @@ export function createClassicCar(): {
     const pivot = new THREE.Group(); pivot.name = `${z > 0 ? 'front' : 'rear'}-${side > 0 ? 'right' : 'left'}-suspension`; pivot.position.set(side * WHEEL_X, WHEEL_RADIUS, z); root.add(pivot); suspensions.push(pivot);
     const w = new THREE.Group(); w.name = `${z > 0 ? 'Front' : 'Rear'} ${side > 0 ? 'right' : 'left'} wheel`; pivot.add(w); wheels.push(w);
     const assembly = buildWheel(w); if (side < 0) assembly.rotation.y = Math.PI; // mirror so the dish faces outward on both sides
-    // Suspension links ride with the wheel: chrome A-arms in front, trailing link at the rear, coil spring and brake drum.
     const inward = -side;
     const drum = add(new THREE.CylinderGeometry(.13, .13, .07, 24), satin, pivot); drum.rotation.z = Math.PI / 2; drum.position.x = inward * .11;
-    if (z > 0) {
-      for (const [dy, len] of [[.1, .34], [-.06, .4]] as [number, number][]) for (const dz of [-.16, .16]) rod(new THREE.Vector3(inward * .14, dy, 0), new THREE.Vector3(inward * len, dy + .02, dz), .014, chrome, pivot, 8);
-    } else {
-      rod(new THREE.Vector3(inward * .14, -.02, 0), new THREE.Vector3(inward * .3, .02, .7), .02, chrome, pivot, 8);
-    }
-    const coil: [number, number, number][] = []; for (let i = 0; i < 64; i++) { const a = i / 63 * Math.PI * 14; coil.push([inward * .28 + .045 * Math.cos(a), -.04 + i / 63 * .3, .045 * Math.sin(a)]); } tube(coil, .009, chrome, pivot);
+    const knuckle = add(new THREE.CylinderGeometry(.03, .03, .26, 12), chrome, pivot); knuckle.position.set(inward * .14, .01, 0);
   }
-  // Rear axle housing between the rear wheels (rides with the body; short enough to read as one piece).
-  rod(new THREE.Vector3(-WHEEL_X + .14, WHEEL_RADIUS, WHEEL_Z.rear), new THREE.Vector3(WHEEL_X - .14, WHEEL_RADIUS, WHEEL_Z.rear), .045, chrome, chassis, 14);
-  const diff = add(new THREE.SphereGeometry(.15, 20, 14), chrome); diff.scale.set(1.1, .9, 1); diff.position.set(0, WHEEL_RADIUS, WHEEL_Z.rear);
+
+  // ---------- articulated suspension: every link is re-aimed each frame between a body point and a wheel point ----------
+  // Body points are in chassis space, wheel points in the wheel's suspension space; both are mapped into car (root) space,
+  // so arms swing, coil springs stretch/compress and hydraulic rams telescope as the body lifts and wheels hang.
+  type Pt = () => THREE.Vector3;
+  const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3();
+  const onBody = (x: number, y: number, z: number): Pt => { const v = new THREE.Vector3(x, y, z), o = new THREE.Vector3(); return () => o.copy(v).applyMatrix4(chassis.matrix); };
+  const onWheel = (i: number, x: number, y: number, z: number): Pt => { const v = new THREE.Vector3(x, y, z), o = new THREE.Vector3(); return () => o.copy(v).add(suspensions[i].position); };
+  const between = (a: Pt, b: Pt, t: number, off = new THREE.Vector3()): Pt => { const o = new THREE.Vector3(); return () => o.copy(a()).lerp(b(), t).add(off); };
+  const rigParts: (() => void)[] = [];
+  const aim = (m: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3, stretch: boolean) => { tmpB.copy(b).sub(a); const L = tmpB.length(); m.position.copy(a); m.quaternion.setFromUnitVectors(UPV, tmpB.normalize()); if (stretch) m.scale.set(1, L, 1); };
+  /** Solid link (arm, rod, bar): unit-length cylinder from a to b, stretched to fit. */
+  const link = (a: Pt, b: Pt, r: number, m: THREE.Material, seg = 10) => { const g = new THREE.CylinderGeometry(r, r, 1, seg).translate(0, .5, 0); const o = add(g, m, root); rigParts.push(() => aim(o, a(), b(), true)); return o; };
+  /** Ball joint / bushing at a moving point. */
+  const joint = (a: Pt, r: number, m: THREE.Material) => { const o = add(new THREE.SphereGeometry(r, 12, 8), m, root); rigParts.push(() => o.position.copy(a())); };
+  // Coil spring built at its rest length (closed, ground ends; thick plated wire); per frame it is aimed seat-to-seat and
+  // scaled only along its axis, so it visibly compresses and extends without distorting much.
+  chassis.updateMatrix();
+  const spring = (a: Pt, b: Pt, radius: number) => {
+    const L0 = a().distanceTo(b()), turns = 5.5, n = 240, pts: THREE.Vector3[] = [];
+    for (let i = 0; i <= n; i++) { const f = i / n, ang = f * turns * Math.PI * 2; const y = THREE.MathUtils.clamp((f * (turns + 1) - .5) / turns, 0, 1) * L0; pts.push(new THREE.Vector3(Math.cos(ang) * radius, y, Math.sin(ang) * radius)); }
+    const o = add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), n * 2, .021, 10, false), chrome, root);
+    const cup = () => add(new THREE.CylinderGeometry(radius * 1.3, radius * 1.3, .022, 24), gold, root); const cupA = cup(), cupB = cup();
+    rigParts.push(() => { const A = a(), B = b(); aim(o, A, B, false); o.scale.set(1, A.distanceTo(B) / L0, 1); cupA.position.copy(A); cupA.quaternion.copy(o.quaternion); cupB.position.copy(B); cupB.quaternion.copy(o.quaternion); });
+  };
+  /** Hydraulic ram: plated barrel fixed to the body, polished rod fixed to the arm; they slide over each other. */
+  const ram = (body: Pt, wheel: Pt) => {
+    const barrel = add(new THREE.CylinderGeometry(.034, .034, .24, 18).translate(0, .12, 0), chrome, root);
+    const collar = add(new THREE.CylinderGeometry(.042, .042, .03, 18).translate(0, .23, 0), gold, root);
+    const rodM = add(new THREE.CylinderGeometry(.016, .016, .3, 12).translate(0, .15, 0), chrome, root);
+    rigParts.push(() => { const A = body(), B = wheel(); aim(barrel, A, B, false); collar.position.copy(barrel.position); collar.quaternion.copy(barrel.quaternion); aim(rodM, B, A, false); });
+  };
+  suspensions.forEach((pv, i) => {
+    const side = Math.sign(pv.position.x), inward = -side, z = pv.position.z;
+    if (z > 0) {
+      // Double wishbone: plated upper + lower A-arms, coil between lower arm and frame pocket, ram beside it, tie rod.
+      const KU = onWheel(i, inward * .14, .13, 0), KL = onWheel(i, inward * .14, -.1, 0);
+      for (const dz of [-.15, .15]) { link(KU, onBody(side * .46, .55, z + dz), .017, gold); link(KL, onBody(side * .36, .26, z + dz * 1.3), .02, gold); }
+      joint(KU, .03, chrome); joint(KL, .034, chrome);
+      const seat = onWheel(i, inward * .31, -.11, 0);
+      spring(seat, onBody(side * .5, .52, z), .085);
+      ram(onBody(side * .58, .56, z + .14), onWheel(i, inward * .27, -.08, .14));
+      link(onWheel(i, inward * .13, -.03, -.17), onBody(side * .22, .27, z - .2), .012, chrome);
+      link(onWheel(i, inward * .3, -.07, .2), onBody(side * .38, .27, z + .32), .009, chrome); // anti-roll bar end link
+    } else {
+      // Four-link rear: lower and upper trailing arms to the axle, coil on the axle, ram beside it.
+      link(onWheel(i, inward * .16, -.06, 0), onBody(side * .42, .26, z + .78), .022, gold);
+      spring(onWheel(i, inward * .28, -.02, 0), onBody(side * .5, .54, z), .082);
+      ram(onBody(side * .58, .56, z - .14), onWheel(i, inward * .24, -.02, -.14));
+    }
+  });
+  // Live rear axle between the rear hubs, chrome pumpkin in the middle, upper links, panhard bar, driveshaft with U-joints.
+  const RL = onWheel(2, .12, 0, 0), RRt = onWheel(3, -.12, 0, 0), axleMid = between(RL, RRt, .5);
+  link(RL, RRt, .045, chrome, 16);
+  { const pumpkin = add(new THREE.SphereGeometry(.15, 24, 16), chrome, root); pumpkin.scale.set(1.15, .95, 1); const cover = add(new THREE.CylinderGeometry(.12, .12, .05, 24), gold, root); cover.rotation.x = Math.PI / 2;
+    rigParts.push(() => { const m = axleMid(); pumpkin.position.copy(m); cover.position.copy(m).add(tmpA.set(0, 0, -.13)); }); }
+  for (const s of [-1, 1]) link(between(RL, RRt, .5, new THREE.Vector3(s * .14, .12, 0)), onBody(s * .2, .33, WHEEL_Z.rear + .62), .018, gold);
+  link(between(RL, RRt, .05, new THREE.Vector3(0, .06, .05)), onBody(.45, .38, WHEEL_Z.rear + .1), .016, chrome);
+  const tailShaft = onBody(0, .32, .32), yoke = between(RL, RRt, .5, new THREE.Vector3(0, 0, .16));
+  link(tailShaft, yoke, .035, chrome, 16); joint(tailShaft, .045, gold); joint(yoke, .045, gold);
+
+  const articulate = () => { chassis.updateMatrix(); rigParts.forEach(f => f()); };
+  articulate();
 
   root.userData = { asset: 'procedural lowrider hardtop', forwardAxis: '+Z', length: CAR_LENGTH, wheelRadius: WHEEL_RADIUS };
   return {
     root, chassis, wheels, suspensions,
     update(spin, bounce, steer = 0) { chassis.position.y = bounce; wheels.forEach(w => w.rotation.x = spin); suspensions.forEach(p => { p.rotation.y = p.position.z > 0 ? steer : 0; }); },
+    articulate,
   };
 }

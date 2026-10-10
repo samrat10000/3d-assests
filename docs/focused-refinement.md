@@ -67,3 +67,11 @@ The car in `src/assets/classic.ts` is rebuilt to the user's lowrider references,
 - **Hydraulics:** exposed chrome cylinders and frame rails, front A-arms, rear trailing links and coil springs. The springs and links ride with each wheel.
 - **Motion** (`MoneyCarScene.ts`): six 4-second moves per loop: nose hop, nose hop, three-wheel left, nose hop, side-to-side sway, three-wheel right. The body is posed by heave, pitch and roll. Once a corner rises past the suspension's travel, that wheel leaves the roll and hangs.
 - **Checks:** loop seam diff 8e-6. The GLB is 32 MB.
+
+## Dream Currency, pass 6: undercarriage and springs
+
+- **Articulated suspension:** every link is re-aimed each frame (`car.articulate()`) between a point on the body and a point on its wheel. As the body lifts and wheels hang, the arms swing, the chrome coil springs stretch and compress between plated cups, and the hydraulic rams telescope (barrel on the body, rod on the arm).
+  - **Front:** gold upper and lower A-arms, ball joints, coils, rams, tie rods and anti-roll bar end links.
+  - **Rear:** a live chrome axle with a pumpkin and gold cover, lower trailing arms, upper links, a panhard bar, coils and rams. The driveshaft has U-joints.
+- **Static underside:** gold X-frame with outriggers and crossmembers, a chrome front crossmember, a ribbed bronze floor with transmission tunnel, the engine sump with fins, bellhousing and transmission, chrome dual exhaust with mufflers, the fuel tank with gold straps, and a hydraulic pump block with chrome hard lines to every corner.
+- **Motion and light:** nose hops now stand the car up harder (pitch 0.27) and three-wheel moves roll further (0.17), so the plated underside is on show. A pink bounce light from below lights it.

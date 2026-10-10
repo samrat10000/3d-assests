@@ -183,7 +183,7 @@ const sunCard=new T.Mesh(new T.PlaneGeometry(6,2.5),new T.MeshBasicMaterial({col
 scene.fog=new T.FogExp2('#c46a86',.0055);
 scene.add(new T.HemisphereLight('#ff9fc0','#4a1c34',.75));
 const sunLight=light(scene,'#ff9a52',3.0,[SUN_DIR.x*30,SUN_DIR.y*30+4,SUN_DIR.z*30],!low);sunLight.shadow.camera.left=-9;sunLight.shadow.camera.right=9;sunLight.shadow.camera.top=9;sunLight.shadow.camera.bottom=-9;sunLight.shadow.camera.far=80;sunLight.target.position.set(0,5,0);scene.add(sunLight.target);
-light(scene,'#ffb0cc',.9,[10,9,2]);light(scene,'#d0609a',.6,[-6,3,9]);
+light(scene,'#ffb0cc',.9,[10,9,2]);light(scene,'#ffa0b8',1.1,[3,-8,2]); // bounce off the roll: lights the plated undercarriagelight(scene,'#d0609a',.6,[-6,3,9]);
 
 // ---------- the money roll ----------
 const noteCanvas=banknoteCanvas();const noteTex=new T.CanvasTexture(noteCanvas);noteTex.colorSpace=T.SRGBColorSpace;noteTex.anisotropy=8;
@@ -252,11 +252,11 @@ return{supportsTransparency:false,root,duration:DURATION,background:'#7a2f52',ta
  const sm=(a:number,b:number)=>T.MathUtils.smoothstep(c,a,b);const hold=(a:number,b:number,cc:number,d:number)=>sm(a,b)*(1-sm(cc,d));
  const ring=(u0:number,amp:number,f:number,decay:number)=>c>u0?amp*Math.sin((c-u0)*f*TAU)*Math.exp(-(c-u0)*decay)*Math.min(1,(1-c)*8):0;
  let h=0,p=0,q=0,hop=0;
- if(move==='nose'){const up=hold(.1,.22,.5,.58);p=.17*up+ring(.58,.05,3,10);h=.13*up-.04*hold(.02,.07,.08,.12)+ring(.58,.035,3,10);hop=.22*Math.pow(Math.max(0,Math.sin(Math.min(1,Math.max(0,(c-.3)/.22))*Math.PI)),1.3);}
- else if(move==='threeL'||move==='threeR'){const sd=move==='threeL'?-1:1,up=hold(.1,.26,.68,.84);q=sd*.13*up+ring(.84,.02*sd,2.5,12);p=.07*up;h=.09*up+ring(.84,.02,2.5,12);}
+ if(move==='nose'){const up=hold(.1,.22,.5,.58);p=.27*up+ring(.58,.06,3,10);h=.16*up-.04*hold(.02,.07,.08,.12)+ring(.58,.035,3,10);hop=.22*Math.pow(Math.max(0,Math.sin(Math.min(1,Math.max(0,(c-.3)/.22))*Math.PI)),1.3);}
+ else if(move==='threeL'||move==='threeR'){const sd=move==='threeL'?-1:1,up=hold(.1,.26,.68,.84);q=sd*.17*up+ring(.84,.025*sd,2.5,12);p=.08*up;h=.11*up+ring(.84,.02,2.5,12);}
  else{const env=hold(.05,.15,.75,.9);q=.09*Math.sin((c-.05)*2*TAU)*env;h=.05*env;p=.02*env;}
  car.root.position.y=rideY+hop;car.update(phase*ROLL_TURNS*R/WHEEL_RADIUS,h);car.chassis.rotation.set(-p,0,q);
- car.suspensions.forEach((s,i)=>{const lift=h+p*s.position.z+q*s.position.x;s.position.y=wheelRest[i]+Math.max(0,lift-TRAVEL)});
+ car.suspensions.forEach((s,i)=>{const lift=h+p*s.position.z+q*s.position.x;s.position.y=wheelRest[i]+Math.max(0,lift-TRAVEL)});car.articulate();
  const suspension=h,pitch=p,cycle=c;
  root.userData.motion={hop,suspension,pitch,cycle};contactMat.opacity=.7*Math.max(.25,1-hop*5);
  balloons.forEach((b,i)=>{b.group.position.copy(b.base);b.group.position.y+=.35*Math.sin(phase+b.phase*3);b.group.position.x+=.25*Math.sin(phase*2+i);b.group.rotation.z=.02*Math.sin(phase+i)});
