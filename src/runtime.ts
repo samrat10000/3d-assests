@@ -4,12 +4,13 @@ import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
 import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
 import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
 import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
+import type {Pass} from 'three/addons/postprocessing/Pass.js';
 import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
 export type Quality='low'|'medium'|'high';
 export type CameraPreset='cinematic'|'front'|'side'|'back'|'detail'|'wide';
 export interface SceneOptions {quality?:Quality; transparent?:boolean; background?:string; speed?:number; pointer?:boolean; autoplay?:boolean; assetBase?:string}
-export interface World {supportsTransparency?:boolean;root:T.Group;duration:number; background:string; target:T.Vector3; distance:number; bloom:number; update:(t:number)=>void; camera?:(t:number,c:T.PerspectiveCamera)=>void; dispose?:()=>void}
-export type Builder=(scene:T.Scene,renderer:T.WebGLRenderer,options:SceneOptions)=>Promise<World>;
+export interface World {/** Extra post passes inserted before OutputPass (high/medium quality, opaque only). */postPasses?:Pass[];supportsTransparency?:boolean;root:T.Group;duration:number; background:string; target:T.Vector3; distance:number; bloom:number; update:(t:number)=>void; camera?:(t:number,c:T.PerspectiveCamera)=>void; dispose?:()=>void}
+export type Builder=(scene:T.Scene,renderer:T.WebGLRenderer,options:SceneOptions,camera:T.PerspectiveCamera)=>Promise<World>;
 export class Experience {
  scene=new T.Scene(); camera=new T.PerspectiveCamera(36,1,.05,2000); renderer:T.WebGLRenderer; world!:World; ready:Promise<void>; time=0; speed=1; playing=true; preset:CameraPreset='cinematic'; controls:OrbitControls; composer:EffectComposer; bloom:UnrealBloomPass; quality:Quality; private raf=0; private last=0; private dead=false; private visible=true; private resizeObserver:ResizeObserver; private visibilityObserver:IntersectionObserver; private reduced=matchMedia('(prefers-reduced-motion: reduce)'); private frames:number[]=[]; private options:SceneOptions;
  constructor(public container:HTMLElement,builder:Builder,options:SceneOptions={}){
@@ -18,7 +19,7 @@ export class Experience {
  this.controls=new OrbitControls(this.camera,this.renderer.domElement);this.controls.enabled=false;this.controls.enableDamping=true;this.controls.minDistance=1;this.controls.maxDistance=180;
  this.composer=new EffectComposer(this.renderer);this.composer.addPass(new RenderPass(this.scene,this.camera));this.bloom=new UnrealBloomPass(new T.Vector2(800,600),.4,.4,1.2);this.composer.addPass(this.bloom);this.composer.addPass(new OutputPass());
  this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(container);this.visibilityObserver=new IntersectionObserver(e=>{this.visible=e[0].isIntersecting;});this.visibilityObserver.observe(container);document.addEventListener('visibilitychange',this.onVisibility);this.reduced.addEventListener('change',this.onReduced);
- this.ready=builder(this.scene,this.renderer,options).then(w=>{this.world=w;if(this.dead){this.cleanup();return;}this.scene.add(w.root);this.bloom.strength=w.bloom;this.setBackground(options.background??w.background,options.transparent??false);this.controls.target.copy(w.target);this.resize();this.setCamera('cinematic');this.seek(0);if(options.pointer)this.setInspect(true);this.raf=requestAnimationFrame(this.frame);}).catch(e=>{this.dispose();throw e;});
+ this.ready=builder(this.scene,this.renderer,options,this.camera).then(w=>{this.world=w;if(this.dead){this.cleanup();return;}this.scene.add(w.root);this.bloom.strength=w.bloom;w.postPasses?.forEach(p=>this.composer.insertPass(p,this.composer.passes.length-1));this.setBackground(options.background??w.background,options.transparent??false);this.controls.target.copy(w.target);this.resize();this.setCamera('cinematic');this.seek(0);if(options.pointer)this.setInspect(true);this.raf=requestAnimationFrame(this.frame);}).catch(e=>{this.dispose();throw e;});
  }
  private onVisibility=()=>{this.last=0}; private onReduced=(e:MediaQueryListEvent)=>{if(e.matches)this.pause()};
  private frame=(now:number)=>{if(this.dead)return;const dt=this.last?Math.min((now-this.last)/1000,.1):0;this.last=now;if(this.visible&&!document.hidden){if(this.playing)this.time=(this.time+dt*this.speed)%this.world.duration;this.world.update(this.time);if(this.preset==='cinematic'&&!this.controls.enabled)this.updateCamera();if(this.controls.enabled)this.controls.update();const start=performance.now();this.render();this.frames.push(performance.now()-start);if(this.frames.length>240)this.frames.shift();}this.raf=requestAnimationFrame(this.frame)};

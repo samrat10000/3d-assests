@@ -25,3 +25,69 @@ Dream Currency (scene id `money`)
 - `src/assets/classic.ts` — procedural coupe (no source GLB)
 
 Shared by both: `src/runtime.ts`, `src/shared.ts`, `src/optimize.ts`, `src/main.ts`, `src/style.css`. Regenerate exports with `scripts/capture-focused.mjs`.
+
+## Dream Currency — reference-matched rebuild (10 October 2026, pass 2)
+
+Rebuilt against the reference video frame by frame.
+- Car (`src/assets/classic.ts`): new early-60s finned hardtop body. Height-parametrised side surfaces cut true wheel arches, plus a superellipse deck, rear fins with blade tail lamps, lower skegs, hooded quad lamps, a full-width recessed egg-crate grille, a heavy wraparound bumper with bullets, a wraparound windshield, purple-tinted glass, a pale-faced driver, low-profile tyres and polished 6-spoke star rims. The lime-to-cream pearl paint uses vertex colours and iridescence. It exports `WHEEL_RADIUS`, `WHEEL_Z` and `suspensions`.
+- Roll: radius 5, length 7. Two notes wrap the circumference, so headline text and serials run around the roll as in the reference. The notes are shingled with stepped cut edges and have corrugated layer zones. The ends are ragged spiral paper, and there are 4 flat amber bands near the ends. The note art is fictional ("UNITED STATES OF IMAGINATION").
+- Balloons: dark burgundy, rust and striped gored envelopes with scalloped panels, 16 cables, 4 stacked hoop rings (the top one glows as the burner) and a basket. They are placed in each shot's screen space with `inShot()`. Cash streams fall from 4 baskets, and there is a swirling cash cloud.
+- Sky: a saturated pink-magenta sunset with a gold sunward horizon, fbm cloud banks, distant hills and a low sun behind the car. The sun shows under the chassis, which matches the reference's under-bumper glow. The reflection environment is a PMREM of the same sky over a dark ground.
+- Camera: low lens at roll height with long-lens shots. The order is: hero sun-side front 3/4, then head-on, then shaded-side front 3/4, then head-on, then hero push and pull. There is handheld drift at integer loop harmonics.
+- Loop seam: max matrix diff between t=0 and t=24 is 6.5e-6. The GLB was re-exported (23.5 MB).
+- `src/optimize.ts`: `batchRigid` now keeps vertex colours, filling in white when only part of a bucket has them.
+Not done: motion blur, depth of field and burner flame sprites.
+
+## Dream Currency, pass 3 (depth and finish)
+
+- **Front end:** rebuilt to the '61 layout. The nose now curves forward in a soft V. Two small twin lamps sit in dark sockets under a body-colour hood lip. The grille has two tiers of fine grid: the upper tier between the lamps, the lower tier full width with round parking lamps. A heavy chrome bar separates the tiers. The front and rear bumpers are smooth curved chrome shapes wrapped around the corners, not boxes.
+- **Sky:** darker dusk. Rose turns to amber toward the sun and deep plum overhead. Clouds have dark undersides and hot edges, and there's a sea of sunset cloud below the horizon. The sun sits low and directly behind the car from the hero camera, so it glows under the chassis.
+- **Depth:**
+  - Colour grade: magenta in the shadows, warm highlights, vignette, fine grain.
+  - Soft contact shadow on the roll under the car.
+  - Denser pink haze.
+  - Reflections now include a bright horizon strip and a sun card, so paint and chrome get crisp highlight streaks.
+- **Runtime:** `World.postPasses` adds passes before `OutputPass`. The builder now also receives the camera as an optional 4th argument. Other scenes are unaffected.
+- **Checks:** builds pass. The loop seam diff is 6.5e-6. The GLB was re-exported at 26.3 MB.
+
+## Dream Currency, pass 4
+
+- **Lens blur:** removed at your request. The colour grade, vignette and grain stay.
+- **Grille:** rebuilt to match the reference. It's two single rows of upright cells, each about one lamp tall, with thin satin dividers over a dark plum cavity. The upper row sits between the lamps, a heavy chrome bar wraps the corners, and the lower row runs full width with round parking lamps. The bumper moved up to meet it.
+- **Lamps:** smaller, in chrome rings over dark cups. The black sockets are gone.
+- **Note art:** now reads as a hundred-dollar bill. It has "THE UNITED STATES OF AMERICA", "FEDERAL RESERVE NOTE", the black Federal Reserve seal, the green Treasury seal, green serials, rosettes behind the corner 100s, the legal-tender line, signatures and "ONE HUNDRED DOLLARS". The portrait is a generic engraved bust. The paper is cream with a green tint and red/blue fibres.
+
+## Dream Currency, pass 5: lowrider car
+
+The car in `src/assets/classic.ts` is rebuilt to the user's lowrider references, with no badges or scripts.
+- **Body:** early-60s hardtop with slab sides, one knife-edge crease running the full length with a chrome spear, a flat hood and deck, and no fins. It has deep round wheel wells with chrome lips and a broad chrome lower molding.
+- **Front:** quad round lamps in chrome bezels with chrome reflectors, set in chrome housings at the ends of a fine full-width grille (horizontal bars over close vertical dividers). It has a heavy wraparound bumper with a slight V and rectangular amber parking lamps.
+- **Rear:** a satin trim band with three round tail lamps per side, a bumper and twin exhausts.
+- **Wheels:** small chrome wire wheels (72 laced spokes, two-ear knock-off) with thin whitewalls. Wheel radius is now 5/16, so it stays integer against the roll radius.
+- **Hydraulics:** exposed chrome cylinders and frame rails, front A-arms, rear trailing links and coil springs. The springs and links ride with each wheel.
+- **Motion** (`MoneyCarScene.ts`): six 4-second moves per loop: nose hop, nose hop, three-wheel left, nose hop, side-to-side sway, three-wheel right. The body is posed by heave, pitch and roll. Once a corner rises past the suspension's travel, that wheel leaves the roll and hangs.
+- **Checks:** loop seam diff 8e-6. The GLB is 32 MB.
+
+## Dream Currency, pass 6: undercarriage and springs
+
+- **Articulated suspension:** every link is re-aimed each frame (`car.articulate()`) between a point on the body and a point on its wheel. As the body lifts and wheels hang, the arms swing, the chrome coil springs stretch and compress between plated cups, and the hydraulic rams telescope (barrel on the body, rod on the arm).
+  - **Front:** gold upper and lower A-arms, ball joints, coils, rams, tie rods and anti-roll bar end links.
+  - **Rear:** a live chrome axle with a pumpkin and gold cover, lower trailing arms, upper links, a panhard bar, coils and rams. The driveshaft has U-joints.
+- **Static underside:** gold X-frame with outriggers and crossmembers, a chrome front crossmember, a ribbed bronze floor with transmission tunnel, the engine sump with fins, bellhousing and transmission, chrome dual exhaust with mufflers, the fuel tank with gold straps, and a hydraulic pump block with chrome hard lines to every corner.
+- **Motion and light:** nose hops now stand the car up harder (pitch 0.27) and three-wheel moves roll further (0.17), so the plated underside is on show. A pink bounce light from below lights it.
+
+## Dream Currency, pass 7: interior and balloons
+
+- **Driver removed.** The interior is now cream tuck-and-roll throughout: a split front bench with headrests and a rear bench, both with lime piping. It also has pleated door panels with a chrome strip, padded armrests and window cranks, a padded dash with three chrome-bezel gauges, a chrome radio and glovebox seam, and a small chrome chain steering wheel on a chrome column with a column shifter. Plum carpet, a cream headliner, a rear parcel shelf and a rear-view mirror complete it. The glass is a little clearer, so the interior reads from outside.
+- **Balloons:**
+  - Flared fabric skirt and crown ring on each envelope.
+  - A twin plated burner with coils, valves and flickering flames inside the glowing ring. The flicker uses integer loop harmonics.
+  - A square load frame on four suede-covered poles.
+  - The basket is hand-woven wicker with slightly bowed walls, corner posts, a woven floor, a padded leather rim and rope handles.
+  - The cargo is fuel tanks plus burlap money sacks with "$" printed on them, peeking over the rim. There are no passengers.
+
+## Dream Currency, pass 8: sacks, cash stream, burner blasts
+
+- **Money sacks:** burlap texture made in code (irregular threads, slub, a stitched seam, a worn stencilled "$"). Each sack is lumpy and slumped, pinched at the neck under a loose drawstring, with an open folded lip and notes poking out. There are three per basket, all inside the walls and clear of the poles.
+- **Cash from the sacks:** each note pops up out of a sack mouth, flips, catches the wind and flutters down and away. That's 34 notes per balloon across the six balloons near the car, and the cash swirl stays.
+- **Burner blasts:** each burner has three nested jets (blue-white core, orange body, red fringe) drawn by a shader with streaks, a waving body and a frayed tip. Each of the 18 burners fires on its own seeded random schedule: bursts of 0.2–1.8 s, gaps of 0.3–5 s, occasional rapid blips, ramping in quickly and cutting off. The glowing ring flares with each blast. The flames are runtime-only and aren't in the GLB.
